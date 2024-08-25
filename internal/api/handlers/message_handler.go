@@ -8,32 +8,38 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// MessageHandler メッセージ関連のHTTPリクエストを処理するハンドラー構造体
 type MessageHandler struct {
 	service *service.MessageService
 }
 
+// MessageHandler インスタンスを作成
 func NewMessageHandler(service *service.MessageService) *MessageHandler {
 	return &MessageHandler{service: service}
 }
 
+// CreateMessage 新しいメッセージを作成するためのハンドラー
 func (h *MessageHandler) CreateMessage(c *gin.Context) {
 	var input struct {
 		Data models.Message `json:"data"`
 	}
 
+	// リクエストボディをバインド
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	// メッセージを作成
 	if err := h.service.CreateMessage(&input.Data); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create message"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "メッセージの作成に失敗しました"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Message created successfully"})
+	c.JSON(http.StatusCreated, gin.H{"message": "メッセージが正常に作成されました"})
 }
 
+// SearchMessages メッセージを検索するためのハンドラー
 func (h *MessageHandler) SearchMessages(c *gin.Context) {
 	var query struct {
 		Keywords            string `form:"keywords"`
@@ -42,11 +48,13 @@ func (h *MessageHandler) SearchMessages(c *gin.Context) {
 		ChannelID           string `form:"channelID"`
 	}
 
+	// クエリパラメータをバインド
 	if err := c.ShouldBindQuery(&query); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	// デフォルト値の設定
 	if query.Limit == 0 {
 		query.Limit = 10
 	}
@@ -55,6 +63,7 @@ func (h *MessageHandler) SearchMessages(c *gin.Context) {
 		query.KeywordSearchMethod = "and"
 	}
 
+	// メッセージを検索
 	results, err := h.service.SearchMessages(map[string]interface{}{
 		"keywords":            query.Keywords,
 		"keywordSearchMethod": query.KeywordSearchMethod,
@@ -63,9 +72,10 @@ func (h *MessageHandler) SearchMessages(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search messages"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "メッセージの検索に失敗しました"})
 		return
 	}
 
-	c.JSON(http.StatusOK, results)
+	// マークダウン形式の結果を文字列として返す
+	c.String(http.StatusOK, results)
 }
