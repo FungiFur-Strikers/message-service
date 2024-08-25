@@ -4,11 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "8081:8080"
+      - "12203:8080"
     depends_on:
       - db
-    environment:
-      - DATABASE_URL=postgres://user:password@db:5432/discord_messages?sslmode=disable
     volumes:
       - .:/app
     command: air -c .air.toml
