@@ -9,6 +9,8 @@ services:
       - db
     volumes:
       - .:/app
+    environment:
+      - TZ=Asia/Tokyo
     command: air -c .air.toml
 
   db:
