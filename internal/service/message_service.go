@@ -12,7 +12,7 @@ type MessageService struct {
 	repo *repository.MessageRepository
 }
 
-//  MessageService インスタンスを作成
+// MessageService インスタンスを作成
 func NewMessageService(repo *repository.MessageRepository) *MessageService {
 	return &MessageService{repo: repo}
 }
@@ -66,11 +66,11 @@ func formatMessagesAsMarkdown(groupedMessages map[string][]models.Message) strin
 
 	for channelID, messages := range groupedMessages {
 		// チャンネルIDをヘッダーとして追加
-		result.WriteString(fmt.Sprintf("## %s\n", channelID))
+		result.WriteString(fmt.Sprintf("# %s\n", channelID))
 
 		for _, msg := range messages {
 			// 各メッセージの送信日時と送信者を追加
-			result.WriteString(fmt.Sprintf("* %s %s\n", 
+			result.WriteString(fmt.Sprintf("------------- %s %s\n",
 				msg.SentAt.Format("2006/01/02 15:04:05"),
 				msg.Sender))
 			// メッセージの内容を追加

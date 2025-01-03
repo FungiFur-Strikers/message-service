@@ -2,6 +2,7 @@ package repository
 
 import (
 	"discord-message-service/internal/models"
+	"sort"
 
 	"gorm.io/gorm"
 )
@@ -30,6 +31,11 @@ func (r *MessageRepository) Search(keyword string, limit int, channelID string) 
 	}
 
 	var messages []models.Message
-	err := query.Limit(limit).Find(&messages).Error
+	err := query.Order("sent_at desc").Limit(limit).Find(&messages).Error
+
+	sort.Slice(messages, func(i, j int) bool {
+		return messages[i].SentAt.Before(messages[j].SentAt)
+	})
+
 	return messages, err
 }

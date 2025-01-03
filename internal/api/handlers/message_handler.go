@@ -56,7 +56,7 @@ func (h *MessageHandler) SearchMessages(c *gin.Context) {
 
 	// デフォルト値の設定
 	if query.Limit == 0 {
-		query.Limit = 10
+		query.Limit = 30
 	}
 
 	if query.KeywordSearchMethod == "" {
