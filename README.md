@@ -1,114 +1,78 @@
-# Discord Message Service
+# Message Service API
 
-Discord Message Service は、Discord のメッセージを保存し、検索する機能を提供する Go 言語で書かれたサービスです。
+メッセージを管理するためのREST APIサービス
 
-## 機能
+## ディレクトリ構成
 
-- Discord メッセージの保存
-- キーワードによるメッセージ検索
-
-## 技術スタック
-
-- Go
-- Gin (Web フレームワーク)
-- GORM (ORM)
-- PostgreSQL (データベース)
-- Docker & Docker Compose (コンテナ化)
-- Air (ホットリロード)
-
-## プロジェクト構造
-
-```
-discord-message-service/
-├── cmd/
-│   └── main.go
-├── internal/
-│   ├── api/
-│   │   ├── handlers/
-│   │   │   ├── message_handler.go
-│   │   │   └── search_handler.go
-│   │   └── routes.go
-│   ├── config/
-│   │   └── config.go
-│   ├── models/
-│   │   └── message.go
-│   ├── repository/
-│   │   └── message_repository.go
-│   └── service/
-│       └── message_service.go
-├── pkg/
-│   └── database/
-│       └── postgres.go
-├── .env
-├── .gitignore
-├── go.mod
-├── go.sum
-├── Dockerfile
-├── compose.yml
-└── .air.toml
+```text
+.
+├── cmd
+│   └── api
+│       └── main.go           # エントリーポイント
+├── pkg
+│   └── api                   # 生成コード
+│       └── openapi.gen.go    # oapi-codegenの出力
+└── internal
+    ├── domain
+    │   └── message          # メッセージドメイン
+    │       ├── entity.go    # ドメインモデル
+    │       └── repository.go # リポジトリインターフェース
+    ├── adapter
+    │   ├── handler         # HTTPハンドラー
+    │   └── repository      # MongoDB実装
+    └── infrastructure      # 技術的関心
+        ├── config
+        └── mongodb
 ```
 
 ## セットアップ
 
-### 前提条件
+### 必要条件
 
-- Docker と Docker Compose がインストールされていること
+- Go 1.21+
+- MongoDB 5.0
 
-### 開発環境のセットアップ
+### 環境変数
 
-1. リポジトリをクローンします：
+```env
+PORT_BACKEND=8080
+MONGO_ROOT_USERNAME=root
+MONGO_ROOT_PASSWORD=password
+```
 
-   ```
-   git clone https://github.com/FungiFur-Strikers/discord-message-service.git
-   cd discord-message-service
-   ```
+## API仕様
 
-2. 環境変数ファイルを作成します：
+### メッセージ登録
 
-   ```
-   cp .env.example .env
-   ```
+```http
+POST /api/message
+Content-Type: application/json
 
-   `.env` ファイルを編集し、必要な環境変数を設定します。
+{
+    "uid": "msg123",
+    "sent_at": "2024-01-04T10:00:00Z",
+    "sender": "user1",
+    "channel_id": "ch1",
+    "content": "Hello World"
+}
+```
 
-3. 開発用 Docker コンテナを起動します：
+### メッセージ検索
 
-   ```
-   docker compose up --build
-   ```
+```http
+GET /api/message/search?channel_id=ch1&from_date=2024-01-01T00:00:00Z
+```
 
-   これにより、アプリケーションと PostgreSQL データベースが起動します。
+### メッセージ削除
 
-4. アプリケーションは `http://localhost:8081` で利用可能になります。
-
-### 本番環境のビルドとデプロイ
-
-1. 本番用 Docker イメージをビルドします：
-
-   ```
-   docker build -t discord-message-service .
-   ```
-
-2. 本番環境用の `compose.prd.yml` を使用してサービスを起動します：
-
-   ```
-   docker compose -f compose.prd.yml up -d
-   ```
-
-## API エンドポイント
-
-- `POST /api/messages`: 新しいメッセージを作成
-- `GET /api/messages/search`: メッセージを検索
+```http
+DELETE /api/message/msg123
+```
 
 ## 開発
 
-- コードを変更すると、Air がホットリロードを行い、自動的にアプリケーションを再起動します。
-- 新しい機能を追加する場合は、適切なテストを書いてください。
+### OpenAPI仕様の更新
 
-## テスト
-
-テストを実行するには、以下のコマンドを使用します：
-
-```
-go test ./...
+```bash
+docker compose exec backend oapi-codegen -config config.yaml /openapi/index.yaml
 ```
