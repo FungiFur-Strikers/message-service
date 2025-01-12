@@ -42,6 +42,8 @@ MONGO_ROOT_PASSWORD=password
 
 ## API仕様
 
+[仕様：OpenAPI](https://fungifur-strikers.github.io/message-service/src/openapi/)
+
 ### メッセージ登録
 
 ```http
