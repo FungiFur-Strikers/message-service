@@ -1,8 +1,9 @@
-FROM golang:1.22-alpine
+FROM golang:1.23-alpine
 WORKDIR /app
 
-# Install air using the new repository path
 RUN go install github.com/air-verse/air@latest
+RUN go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@latest
+
 COPY go.mod go.sum ./
 RUN go mod download
 

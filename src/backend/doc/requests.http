@@ -1,0 +1,17 @@
+### メッセージ作成
+POST http://localhost:8080/api/message
+Content-Type: application/json
+
+{
+    "uid": "msg123",
+    "sent_at": "2024-01-04T10:00:00Z",
+    "sender": "user1",
+    "channel_id": "ch1",
+    "content": "Hello World"
+}
+
+### メッセージ検索
+GET http://localhost:8080/api/message/search?channel_id=ch1&from_date=2024-01-01T00:00:00Z
+
+### メッセージ削除
+DELETE http://localhost:8080/api/message/msg123
