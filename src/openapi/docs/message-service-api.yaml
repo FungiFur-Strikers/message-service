@@ -1,0 +1,120 @@
+openapi: 3.0.0
+info:
+  title: Message Service API
+  version: 1.0.0
+  description: API for managing messages
+
+paths:
+  /api/message:
+    post:
+      summary: メッセージ登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+      responses:
+        '201':
+          description: メッセージが登録されました
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: 無効なリクエスト
+
+  /api/message/{uid}:
+    delete:
+      summary: メッセージ削除
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          description: 削除対象メッセージのUID
+          schema:
+            type: string
+      responses:
+        '204':
+          description: メッセージが削除されました
+        '404':
+          description: メッセージが見つかりません
+
+  /api/message/search:
+    get:
+      summary: メッセージ検索
+      parameters:
+        - name: channel_id
+          in: query
+          schema:
+            type: string
+        - name: sender
+          in: query
+          schema:
+            type: string
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 検索結果
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+
+components:
+  schemas:
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: uint
+        uid:
+          type: string
+        sent_at:
+          type: string
+          format: date-time
+        sender:
+          type: string
+        channel_id:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MessageCreate:
+      type: object
+      required:
+        - uid
+        - sent_at
+        - sender
+        - channel_id
+        - content
+      properties:
+        uid:
+          type: string
+        sent_at:
+          type: string
+          format: date-time
+        sender:
+          type: string
+        channel_id:
+          type: string
+        content:
+          type: string
