@@ -10,11 +10,11 @@ type MessageHandler struct {
 	repo message.Repository
 }
 
-func NewMessageHandler(repo message.Repository) api.StrictServerInterface {
+func NewMessageHandler(repo message.Repository) *MessageHandler {
 	return &MessageHandler{repo: repo}
 }
 
-func (h *MessageHandler) PostApiMessage(ctx context.Context, req api.PostApiMessageRequestObject) (api.PostApiMessageResponseObject, error) {
+func (h *MessageHandler) PostApiMessages(ctx context.Context, req api.PostApiMessagesRequestObject) (api.PostApiMessagesResponseObject, error) {
 	msg := &message.Message{
 		UID:       req.Body.Uid,
 		SentAt:    req.Body.SentAt,
@@ -24,10 +24,10 @@ func (h *MessageHandler) PostApiMessage(ctx context.Context, req api.PostApiMess
 	}
 
 	if err := h.repo.Create(ctx, msg); err != nil {
-		return api.PostApiMessage400Response{}, err
+		return api.PostApiMessages400Response{}, err
 	}
 
-	return api.PostApiMessage201JSONResponse{
+	return api.PostApiMessages201JSONResponse{
 		ChannelId: &msg.ChannelID,
 		Content:   &msg.Content,
 		CreatedAt: &msg.CreatedAt,
@@ -38,14 +38,7 @@ func (h *MessageHandler) PostApiMessage(ctx context.Context, req api.PostApiMess
 	}, nil
 }
 
-func (h *MessageHandler) DeleteApiMessageUid(ctx context.Context, req api.DeleteApiMessageUidRequestObject) (api.DeleteApiMessageUidResponseObject, error) {
-	if err := h.repo.Delete(ctx, req.Uid); err != nil {
-		return api.DeleteApiMessageUid404Response{}, err
-	}
-	return api.DeleteApiMessageUid204Response{}, nil
-}
-
-func (h *MessageHandler) GetApiMessageSearch(ctx context.Context, req api.GetApiMessageSearchRequestObject) (api.GetApiMessageSearchResponseObject, error) {
+func (h *MessageHandler) GetApiMessagesSearch(ctx context.Context, req api.GetApiMessagesSearchRequestObject) (api.GetApiMessagesSearchResponseObject, error) {
 	criteria := message.SearchCriteria{
 		ChannelID: req.Params.ChannelId,
 		Sender:    req.Params.Sender,
@@ -58,7 +51,7 @@ func (h *MessageHandler) GetApiMessageSearch(ctx context.Context, req api.GetApi
 		return nil, err
 	}
 
-	response := make(api.GetApiMessageSearch200JSONResponse, len(messages))
+	response := make(api.GetApiMessagesSearch200JSONResponse, len(messages))
 	for i, msg := range messages {
 		response[i] = api.Message{
 			ChannelId: &msg.ChannelID,
@@ -72,4 +65,11 @@ func (h *MessageHandler) GetApiMessageSearch(ctx context.Context, req api.GetApi
 	}
 
 	return response, nil
+}
+
+func (h *MessageHandler) DeleteApiMessagesUid(ctx context.Context, req api.DeleteApiMessagesUidRequestObject) (api.DeleteApiMessagesUidResponseObject, error) {
+	if err := h.repo.Delete(ctx, req.Uid); err != nil {
+		return api.DeleteApiMessagesUid404Response{}, err
+	}
+	return api.DeleteApiMessagesUid204Response{}, nil
 }

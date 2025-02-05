@@ -1,80 +1,160 @@
-# Message Service API
+# Message Service
 
-メッセージを管理するためのREST APIサービス
+メッセージングプラットフォーム向けの RESTful API サービス。チャンネルベースのメッセージを管理し、認証機能を提供します。
 
-## ディレクトリ構成
+## 主要機能
 
-```text
-.
-├── cmd
-│   └── api
-│       └── main.go           # エントリーポイント
-├── pkg
-│   └── api                   # 生成コード
-│       └── openapi.gen.go    # oapi-codegenの出力
-└── internal
-    ├── domain
-    │   └── message          # メッセージドメイン
-    │       ├── entity.go    # ドメインモデル
-    │       └── repository.go # リポジトリインターフェース
-    ├── adapter
-    │   ├── handler         # HTTPハンドラー
-    │   └── repository      # MongoDB実装
-    └── infrastructure      # 技術的関心
-        ├── config
-        └── mongodb
+### メッセージ管理
+
+- チャンネルごとのメッセージの作成・削除
+- 送信者、チャンネル、日時による高度な検索機能
+- タイムスタンプと一意の ID によるメッセージ管理
+
+### 認証・認可
+
+- Bearer 認証による API アクセス制御
+- 有効期限付きアクセストークンの発行・管理
+- トークンの無効化機能
+
+## 技術スタック
+
+### バックエンド
+
+![Go](https://img.shields.io/badge/go-1.22.0-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![Gin](https://img.shields.io/badge/gin-v1.10.0-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-5.0-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
+![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-6BA539?style=for-the-badge&logo=openapi-initiative&logoColor=white)
+
+### 開発ツール & インフラ
+
+![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Redoc](https://img.shields.io/badge/Redoc-2.0.0-8CA1AF?style=for-the-badge&logo=read-the-docs&logoColor=white)
+![Air](https://img.shields.io/badge/Air-Live_Reload-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+
+## プロジェクト構造
+
+```
+message-service/
+├── .air.toml          # Live reload configuration
+├── .docker/           # Docker related files
+├── compose.yml        # Docker compose configuration
+├── src/
+│   ├── backend/       # Go backend application
+│   │   ├── cmd/      # Application entrypoints
+│   │   ├── internal/ # Internal packages
+│   │   │   ├── adapter/       # Interface adapters
+│   │   │   ├── domain/        # Domain layer
+│   │   │   └── infrastructure/# Infrastructure layer
+│   │   └── go.mod    # Go modules file
+│   └── openapi/      # OpenAPI/Swagger documentation
 ```
 
 ## セットアップ
 
 ### 必要条件
 
-- Go 1.21+
-- MongoDB 5.0
+- Go 1.22.0 以上
+- Docker & Docker Compose
+- Make (オプション)
 
-### 環境変数
+### 環境構築
 
-```env
-PORT_BACKEND=8080
-MONGO_ROOT_USERNAME=root
-MONGO_ROOT_PASSWORD=password
+1. リポジトリのクローン
+
+```bash
+git clone https://github.com/yourusername/message-service.git
+cd message-service
 ```
 
-## API仕様
+2. 環境変数の設定
+
+```bash
+cp .env.example .env
+# .envファイルを編集して必要な環境変数を設定
+```
+
+必要な環境変数：
+
+- `BACKEND_PORT`: バックエンドサービスのポート
+- `MONGO_INITDB_ROOT_USERNAME`: MongoDB の root 用ユーザー名
+- `MONGO_INITDB_ROOT_PASSWORD`: MongoDB の root 用パスワード
+- `MONGODB_NAME`: データベース名
+- `MONGO_EXPRESS_PORT`: Mongo Express のポート
+- `MONGO_EXPRESS_BASICAUTH_USERNAME`: Mongo Express 用の基本認証ユーザー名
+- `MONGO_EXPRESS_BASICAUTH_PASSWORD`: Mongo Express 用の基本認証パスワード
+- `REDOC_PORT`: API ドキュメントのポート
+
+3. アプリケーションの起動
+
+```bash
+docker compose up -d
+```
+
+## 提供サービス
+
+起動後、以下のサービスにアクセスできます：
+
+- API サーバー: `http://localhost:{BACKEND_PORT}`
+- API ドキュメント: `http://localhost:{REDOC_PORT}`
+- データベース管理 UI: `http://localhost:{MONGO_EXPRESS_PORT}`
+
+## API ドキュメント
+
+OpenAPI (Swagger) ドキュメントは以下の URL で確認できます：
+
+```
+http://localhost:{REDOC_PORT}
+```
 
 [仕様：OpenAPI](https://fungifur-strikers.github.io/message-service/src/openapi/)
 
-### メッセージ登録
+API ドキュメントは[Redoc](https://github.com/Redocly/redoc)を使用して生成され、自動的に更新されます。
 
-```http
-POST /api/message
-Content-Type: application/json
+## 開発ガイド
 
-{
-    "uid": "msg123",
-    "sent_at": "2024-01-04T10:00:00Z",
-    "sender": "user1",
-    "channel_id": "ch1",
-    "content": "Hello World"
-}
+### アーキテクチャ
+
+このプロジェクトはクリーンアーキテクチャの原則に従って構築されています：
+
+- `domain`: ビジネスロジックとエンティティ
+- `adapter`: 外部インターフェースの実装（HTTP ハンドラーなど）
+- `infrastructure`: 外部サービスとの統合（データベース、認証など）
+
+### 開発環境の準備
+
+1. 依存関係のインストール
+
+```bash
+cd src/backend
+go mod download
 ```
 
-### メッセージ検索
+2. ホットリロードでの開発
 
-```http
-GET /api/message/search?channel_id=ch1&from_date=2024-01-01T00:00:00Z
+```bash
+air
 ```
 
-### メッセージ削除
+### データベース管理
 
-```http
-DELETE /api/message/msg123
+MongoDB 管理用の Web UI には以下の URL からアクセスできます：
+
+```
+http://localhost:{MONGO_EXPRESS_PORT}
 ```
 
-## 開発
-
-### OpenAPI仕様の更新
+### OpenAPI 仕様の更新
 
 ```bash
 docker compose exec backend oapi-codegen -config config.yaml /openapi/index.yaml
 ```
+
+### テスト
+
+```bash
+go test ./...
+```
+
+## ライセンス
+
+[MIT](LICENSE)

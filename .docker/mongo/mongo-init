@@ -1,0 +1,12 @@
+// mongo-init/init.js
+db = db.getSiblingDB('message_service');
+
+// インデックスの作成
+db.messages.createIndex({ "uid": 1, "deleted_at": 1 }, { unique: true });
+db.messages.createIndex({ "channel_id": 1, "deleted_at": 1 });
+db.messages.createIndex({ "sender": 1, "deleted_at": 1 });
+db.messages.createIndex({ "sent_at": -1, "deleted_at": 1 });
+
+db.tokens.createIndex({ "token": 1, "deleted_at": 1 }, { unique: true });
+db.tokens.createIndex({ "expires_at": 1, "deleted_at": 1 });
+db.tokens.createIndex({ "created_at": -1, "deleted_at": 1 });

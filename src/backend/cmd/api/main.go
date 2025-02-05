@@ -4,7 +4,8 @@ import (
 	"context"
 	"log"
 	"message-service/internal/adapter/handler"
-	"message-service/internal/adapter/repository"
+	"message-service/internal/infrastructure/middleware"
+	"message-service/internal/infrastructure/mongodb/repository"
 	"message-service/pkg/api"
 	"os"
 	"time"
@@ -32,11 +33,14 @@ func main() {
 	db := client.Database(dbName)
 
 	// 依存関係の構築
-	repo := repository.NewMongoRepository(db)
-	handler := handler.NewMessageHandler(repo)
+	messageRepo := repository.NewMessageRepository(db)
+	tokenRepo := repository.NewTokenRepository(db)
+	handler := handler.NewHandler(messageRepo, tokenRepo)
+	authMiddleware := middleware.NewAuthMiddleware(tokenRepo)
 
 	// Ginルーターの設定
 	router := gin.Default()
+	router.Use(authMiddleware.RequireAuth())
 	api.RegisterHandlers(router, api.NewStrictHandler(handler, nil))
 
 	// サーバー起動
