@@ -1,0 +1,45 @@
+### 環境変数
+@baseUrl = http://localhost:8080
+@authToken = _dYWk0Wvdj3pMor_eQArviCpZ6ge6dTM7ZzUP-Sv5H8=
+
+### メッセージ登録
+POST {{baseUrl}}/api/messages
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "uid": "msg123",
+    "sent_at": "2024-02-05T10:00:00Z",
+    "sender": "testUser",
+    "channel_id": "channel123",
+    "content": "テストメッセージです"
+}
+
+### メッセージ検索（全件）
+GET {{baseUrl}}/api/messages/search
+Authorization: Bearer {{authToken}}
+
+### メッセージ検索（条件指定）
+GET {{baseUrl}}/api/messages/search?channel_id=channel123&sender=testUser&from_date=2024-02-01T00:00:00Z&to_date=2024-02-06T23:59:59Z
+Authorization: Bearer {{authToken}}
+
+### メッセージ削除
+DELETE {{baseUrl}}/api/messages/msg123
+Authorization: Bearer {{authToken}}
+
+### トークン発行
+POST {{baseUrl}}/api/tokens
+Content-Type: application/json
+
+{
+    "name": "test-token",
+    "expires_in": 86400
+}
+
+### トークン一覧取得
+GET {{baseUrl}}/api/tokens
+Authorization: Bearer {{authToken}}
+
+### トークン削除
+DELETE {{baseUrl}}/api/tokens/65c0b1234567890123456789
+Authorization: Bearer {{authToken}}
