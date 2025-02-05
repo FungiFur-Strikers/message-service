@@ -8,12 +8,13 @@ services:
     volumes:
       - ./src/backend:/app
       - ./src/openapi/docs/message-service-api.yaml:/openapi/index.yaml
+      - ./.docker/mongo/mongo-init:/docker-entrypoint-initdb.d
     command: air -c .air.toml
     depends_on:
       - mongo
     environment:
-      - MONGODB_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/botgo.mod?authSource=admin
-      - MONGODB_NAME=discord_bot
+      - MONGODB_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/${MONGODB_NAME}?authSource=admin
+      - MONGODB_NAME=message_service
       - SERVER_ADDRESS=:8080
       - TZ=Asia/Tokyo
 

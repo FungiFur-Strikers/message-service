@@ -7,27 +7,29 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type mongoRepository struct {
+type MessageRepository struct {
 	collection *mongo.Collection
 }
 
-func NewMongoRepository(db *mongo.Database) message.Repository {
-	return &mongoRepository{
+func NewMessageRepository(db *mongo.Database) message.Repository {
+	return &MessageRepository{
 		collection: db.Collection("messages"),
 	}
 }
 
-func (r *mongoRepository) Create(ctx context.Context, msg *message.Message) error {
-	msg.CreatedAt = time.Now()
-	msg.UpdatedAt = time.Now()
+func (r *MessageRepository) Create(ctx context.Context, msg *message.Message) error {
+	now := time.Now()
+	msg.CreatedAt = now
+	msg.UpdatedAt = now
 
 	_, err := r.collection.InsertOne(ctx, msg)
 	return err
 }
 
-func (r *mongoRepository) Delete(ctx context.Context, uid string) error {
+func (r *MessageRepository) Delete(ctx context.Context, uid string) error {
 	now := time.Now()
 	filter := bson.M{"uid": uid, "deleted_at": nil}
 	update := bson.M{"$set": bson.M{
@@ -46,7 +48,7 @@ func (r *mongoRepository) Delete(ctx context.Context, uid string) error {
 	return nil
 }
 
-func (r *mongoRepository) Search(ctx context.Context, criteria message.SearchCriteria) ([]message.Message, error) {
+func (r *MessageRepository) Search(ctx context.Context, criteria message.SearchCriteria) ([]message.Message, error) {
 	filter := bson.M{"deleted_at": nil}
 
 	if criteria.ChannelID != nil {
@@ -66,7 +68,8 @@ func (r *mongoRepository) Search(ctx context.Context, criteria message.SearchCri
 		filter["sent_at"] = dateFilter
 	}
 
-	cursor, err := r.collection.Find(ctx, filter)
+	opts := options.Find().SetSort(bson.D{{Key: "sent_at", Value: -1}})
+	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -80,11 +83,14 @@ func (r *mongoRepository) Search(ctx context.Context, criteria message.SearchCri
 	return messages, nil
 }
 
-func (r *mongoRepository) FindByUID(ctx context.Context, uid string) (*message.Message, error) {
+func (r *MessageRepository) FindByUID(ctx context.Context, uid string) (*message.Message, error) {
 	filter := bson.M{"uid": uid, "deleted_at": nil}
 
 	var msg message.Message
 	if err := r.collection.FindOne(ctx, filter).Decode(&msg); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
 		return nil, err
 	}
 

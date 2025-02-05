@@ -22,12 +22,15 @@ import (
 	strictgin "github.com/oapi-codegen/runtime/strictmiddleware/gin"
 )
 
+const (
+	BearerAuthScopes = "BearerAuth.Scopes"
+)
+
 // Message defines model for Message.
 type Message struct {
 	ChannelId *string    `json:"channel_id,omitempty"`
 	Content   *string    `json:"content,omitempty"`
 	CreatedAt *time.Time `json:"created_at,omitempty"`
-	Id        *uint      `json:"id,omitempty"`
 	Sender    *string    `json:"sender,omitempty"`
 	SentAt    *time.Time `json:"sent_at,omitempty"`
 	Uid       *string    `json:"uid,omitempty"`
@@ -43,28 +46,69 @@ type MessageCreate struct {
 	Uid       string    `json:"uid"`
 }
 
-// GetApiMessageSearchParams defines parameters for GetApiMessageSearch.
-type GetApiMessageSearchParams struct {
+// Token defines model for Token.
+type Token struct {
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Id        *string    `json:"id,omitempty"`
+
+	// Name Token identifier name
+	Name      *string    `json:"name,omitempty"`
+	Token     *string    `json:"token,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+// TokenCreate defines model for TokenCreate.
+type TokenCreate struct {
+	// ExpiresIn Token expiration period in seconds
+	ExpiresIn *int `json:"expires_in,omitempty"`
+
+	// Name Token identifier name
+	Name string `json:"name"`
+}
+
+// TokenResponse defines model for TokenResponse.
+type TokenResponse struct {
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Id        *string    `json:"id,omitempty"`
+	Name      *string    `json:"name,omitempty"`
+	Token     *string    `json:"token,omitempty"`
+}
+
+// GetApiMessagesSearchParams defines parameters for GetApiMessagesSearch.
+type GetApiMessagesSearchParams struct {
 	ChannelId *string    `form:"channel_id,omitempty" json:"channel_id,omitempty"`
 	Sender    *string    `form:"sender,omitempty" json:"sender,omitempty"`
 	FromDate  *time.Time `form:"from_date,omitempty" json:"from_date,omitempty"`
 	ToDate    *time.Time `form:"to_date,omitempty" json:"to_date,omitempty"`
 }
 
-// PostApiMessageJSONRequestBody defines body for PostApiMessage for application/json ContentType.
-type PostApiMessageJSONRequestBody = MessageCreate
+// PostApiMessagesJSONRequestBody defines body for PostApiMessages for application/json ContentType.
+type PostApiMessagesJSONRequestBody = MessageCreate
+
+// PostApiTokensJSONRequestBody defines body for PostApiTokens for application/json ContentType.
+type PostApiTokensJSONRequestBody = TokenCreate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// メッセージ登録
-	// (POST /api/message)
-	PostApiMessage(c *gin.Context)
-	// メッセージ検索
-	// (GET /api/message/search)
-	GetApiMessageSearch(c *gin.Context, params GetApiMessageSearchParams)
-	// メッセージ削除
-	// (DELETE /api/message/{uid})
-	DeleteApiMessageUid(c *gin.Context, uid string)
+	// Create message
+	// (POST /api/messages)
+	PostApiMessages(c *gin.Context)
+	// Search messages
+	// (GET /api/messages/search)
+	GetApiMessagesSearch(c *gin.Context, params GetApiMessagesSearchParams)
+	// Delete message
+	// (DELETE /api/messages/{uid})
+	DeleteApiMessagesUid(c *gin.Context, uid string)
+	// Get token list
+	// (GET /api/tokens)
+	GetApiTokens(c *gin.Context)
+	// Create new token
+	// (POST /api/tokens)
+	PostApiTokens(c *gin.Context)
+	// Invalidate token
+	// (DELETE /api/tokens/{id})
+	DeleteApiTokensId(c *gin.Context, id string)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -76,8 +120,10 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(c *gin.Context)
 
-// PostApiMessage operation middleware
-func (siw *ServerInterfaceWrapper) PostApiMessage(c *gin.Context) {
+// PostApiMessages operation middleware
+func (siw *ServerInterfaceWrapper) PostApiMessages(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -86,16 +132,18 @@ func (siw *ServerInterfaceWrapper) PostApiMessage(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.PostApiMessage(c)
+	siw.Handler.PostApiMessages(c)
 }
 
-// GetApiMessageSearch operation middleware
-func (siw *ServerInterfaceWrapper) GetApiMessageSearch(c *gin.Context) {
+// GetApiMessagesSearch operation middleware
+func (siw *ServerInterfaceWrapper) GetApiMessagesSearch(c *gin.Context) {
 
 	var err error
 
+	c.Set(BearerAuthScopes, []string{})
+
 	// Parameter object where we will unmarshal all parameters from the context
-	var params GetApiMessageSearchParams
+	var params GetApiMessagesSearchParams
 
 	// ------------- Optional query parameter "channel_id" -------------
 
@@ -136,11 +184,11 @@ func (siw *ServerInterfaceWrapper) GetApiMessageSearch(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.GetApiMessageSearch(c, params)
+	siw.Handler.GetApiMessagesSearch(c, params)
 }
 
-// DeleteApiMessageUid operation middleware
-func (siw *ServerInterfaceWrapper) DeleteApiMessageUid(c *gin.Context) {
+// DeleteApiMessagesUid operation middleware
+func (siw *ServerInterfaceWrapper) DeleteApiMessagesUid(c *gin.Context) {
 
 	var err error
 
@@ -153,6 +201,8 @@ func (siw *ServerInterfaceWrapper) DeleteApiMessageUid(c *gin.Context) {
 		return
 	}
 
+	c.Set(BearerAuthScopes, []string{})
+
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -160,7 +210,63 @@ func (siw *ServerInterfaceWrapper) DeleteApiMessageUid(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.DeleteApiMessageUid(c, uid)
+	siw.Handler.DeleteApiMessagesUid(c, uid)
+}
+
+// GetApiTokens operation middleware
+func (siw *ServerInterfaceWrapper) GetApiTokens(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetApiTokens(c)
+}
+
+// PostApiTokens operation middleware
+func (siw *ServerInterfaceWrapper) PostApiTokens(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostApiTokens(c)
+}
+
+// DeleteApiTokensId operation middleware
+func (siw *ServerInterfaceWrapper) DeleteApiTokensId(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameter("simple", false, "id", c.Param("id"), &id)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteApiTokensId(c, id)
 }
 
 // GinServerOptions provides options for the Gin server.
@@ -190,88 +296,205 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 		ErrorHandler:       errorHandler,
 	}
 
-	router.POST(options.BaseURL+"/api/message", wrapper.PostApiMessage)
-	router.GET(options.BaseURL+"/api/message/search", wrapper.GetApiMessageSearch)
-	router.DELETE(options.BaseURL+"/api/message/:uid", wrapper.DeleteApiMessageUid)
+	router.POST(options.BaseURL+"/api/messages", wrapper.PostApiMessages)
+	router.GET(options.BaseURL+"/api/messages/search", wrapper.GetApiMessagesSearch)
+	router.DELETE(options.BaseURL+"/api/messages/:uid", wrapper.DeleteApiMessagesUid)
+	router.GET(options.BaseURL+"/api/tokens", wrapper.GetApiTokens)
+	router.POST(options.BaseURL+"/api/tokens", wrapper.PostApiTokens)
+	router.DELETE(options.BaseURL+"/api/tokens/:id", wrapper.DeleteApiTokensId)
 }
 
-type PostApiMessageRequestObject struct {
-	Body *PostApiMessageJSONRequestBody
+type PostApiMessagesRequestObject struct {
+	Body *PostApiMessagesJSONRequestBody
 }
 
-type PostApiMessageResponseObject interface {
-	VisitPostApiMessageResponse(w http.ResponseWriter) error
+type PostApiMessagesResponseObject interface {
+	VisitPostApiMessagesResponse(w http.ResponseWriter) error
 }
 
-type PostApiMessage201JSONResponse Message
+type PostApiMessages201JSONResponse Message
 
-func (response PostApiMessage201JSONResponse) VisitPostApiMessageResponse(w http.ResponseWriter) error {
+func (response PostApiMessages201JSONResponse) VisitPostApiMessagesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type PostApiMessage400Response struct {
+type PostApiMessages400Response struct {
 }
 
-func (response PostApiMessage400Response) VisitPostApiMessageResponse(w http.ResponseWriter) error {
+func (response PostApiMessages400Response) VisitPostApiMessagesResponse(w http.ResponseWriter) error {
 	w.WriteHeader(400)
 	return nil
 }
 
-type GetApiMessageSearchRequestObject struct {
-	Params GetApiMessageSearchParams
+type PostApiMessages401Response struct {
 }
 
-type GetApiMessageSearchResponseObject interface {
-	VisitGetApiMessageSearchResponse(w http.ResponseWriter) error
+func (response PostApiMessages401Response) VisitPostApiMessagesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
 }
 
-type GetApiMessageSearch200JSONResponse []Message
+type GetApiMessagesSearchRequestObject struct {
+	Params GetApiMessagesSearchParams
+}
 
-func (response GetApiMessageSearch200JSONResponse) VisitGetApiMessageSearchResponse(w http.ResponseWriter) error {
+type GetApiMessagesSearchResponseObject interface {
+	VisitGetApiMessagesSearchResponse(w http.ResponseWriter) error
+}
+
+type GetApiMessagesSearch200JSONResponse []Message
+
+func (response GetApiMessagesSearch200JSONResponse) VisitGetApiMessagesSearchResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type DeleteApiMessageUidRequestObject struct {
+type GetApiMessagesSearch401Response struct {
+}
+
+func (response GetApiMessagesSearch401Response) VisitGetApiMessagesSearchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type DeleteApiMessagesUidRequestObject struct {
 	Uid string `json:"uid"`
 }
 
-type DeleteApiMessageUidResponseObject interface {
-	VisitDeleteApiMessageUidResponse(w http.ResponseWriter) error
+type DeleteApiMessagesUidResponseObject interface {
+	VisitDeleteApiMessagesUidResponse(w http.ResponseWriter) error
 }
 
-type DeleteApiMessageUid204Response struct {
+type DeleteApiMessagesUid204Response struct {
 }
 
-func (response DeleteApiMessageUid204Response) VisitDeleteApiMessageUidResponse(w http.ResponseWriter) error {
+func (response DeleteApiMessagesUid204Response) VisitDeleteApiMessagesUidResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
 	return nil
 }
 
-type DeleteApiMessageUid404Response struct {
+type DeleteApiMessagesUid401Response struct {
 }
 
-func (response DeleteApiMessageUid404Response) VisitDeleteApiMessageUidResponse(w http.ResponseWriter) error {
+func (response DeleteApiMessagesUid401Response) VisitDeleteApiMessagesUidResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type DeleteApiMessagesUid404Response struct {
+}
+
+func (response DeleteApiMessagesUid404Response) VisitDeleteApiMessagesUidResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetApiTokensRequestObject struct {
+}
+
+type GetApiTokensResponseObject interface {
+	VisitGetApiTokensResponse(w http.ResponseWriter) error
+}
+
+type GetApiTokens200JSONResponse []Token
+
+func (response GetApiTokens200JSONResponse) VisitGetApiTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiTokens401Response struct {
+}
+
+func (response GetApiTokens401Response) VisitGetApiTokensResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type PostApiTokensRequestObject struct {
+	Body *PostApiTokensJSONRequestBody
+}
+
+type PostApiTokensResponseObject interface {
+	VisitPostApiTokensResponse(w http.ResponseWriter) error
+}
+
+type PostApiTokens201JSONResponse TokenResponse
+
+func (response PostApiTokens201JSONResponse) VisitPostApiTokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PostApiTokens400Response struct {
+}
+
+func (response PostApiTokens400Response) VisitPostApiTokensResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type DeleteApiTokensIdRequestObject struct {
+	Id string `json:"id"`
+}
+
+type DeleteApiTokensIdResponseObject interface {
+	VisitDeleteApiTokensIdResponse(w http.ResponseWriter) error
+}
+
+type DeleteApiTokensId204Response struct {
+}
+
+func (response DeleteApiTokensId204Response) VisitDeleteApiTokensIdResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteApiTokensId401Response struct {
+}
+
+func (response DeleteApiTokensId401Response) VisitDeleteApiTokensIdResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type DeleteApiTokensId404Response struct {
+}
+
+func (response DeleteApiTokensId404Response) VisitDeleteApiTokensIdResponse(w http.ResponseWriter) error {
 	w.WriteHeader(404)
 	return nil
 }
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// メッセージ登録
-	// (POST /api/message)
-	PostApiMessage(ctx context.Context, request PostApiMessageRequestObject) (PostApiMessageResponseObject, error)
-	// メッセージ検索
-	// (GET /api/message/search)
-	GetApiMessageSearch(ctx context.Context, request GetApiMessageSearchRequestObject) (GetApiMessageSearchResponseObject, error)
-	// メッセージ削除
-	// (DELETE /api/message/{uid})
-	DeleteApiMessageUid(ctx context.Context, request DeleteApiMessageUidRequestObject) (DeleteApiMessageUidResponseObject, error)
+	// Create message
+	// (POST /api/messages)
+	PostApiMessages(ctx context.Context, request PostApiMessagesRequestObject) (PostApiMessagesResponseObject, error)
+	// Search messages
+	// (GET /api/messages/search)
+	GetApiMessagesSearch(ctx context.Context, request GetApiMessagesSearchRequestObject) (GetApiMessagesSearchResponseObject, error)
+	// Delete message
+	// (DELETE /api/messages/{uid})
+	DeleteApiMessagesUid(ctx context.Context, request DeleteApiMessagesUidRequestObject) (DeleteApiMessagesUidResponseObject, error)
+	// Get token list
+	// (GET /api/tokens)
+	GetApiTokens(ctx context.Context, request GetApiTokensRequestObject) (GetApiTokensResponseObject, error)
+	// Create new token
+	// (POST /api/tokens)
+	PostApiTokens(ctx context.Context, request PostApiTokensRequestObject) (PostApiTokensResponseObject, error)
+	// Invalidate token
+	// (DELETE /api/tokens/{id})
+	DeleteApiTokensId(ctx context.Context, request DeleteApiTokensIdRequestObject) (DeleteApiTokensIdResponseObject, error)
 }
 
 type StrictHandlerFunc = strictgin.StrictGinHandlerFunc
@@ -286,11 +509,11 @@ type strictHandler struct {
 	middlewares []StrictMiddlewareFunc
 }
 
-// PostApiMessage operation middleware
-func (sh *strictHandler) PostApiMessage(ctx *gin.Context) {
-	var request PostApiMessageRequestObject
+// PostApiMessages operation middleware
+func (sh *strictHandler) PostApiMessages(ctx *gin.Context) {
+	var request PostApiMessagesRequestObject
 
-	var body PostApiMessageJSONRequestBody
+	var body PostApiMessagesJSONRequestBody
 	if err := ctx.ShouldBind(&body); err != nil {
 		ctx.Status(http.StatusBadRequest)
 		ctx.Error(err)
@@ -299,10 +522,10 @@ func (sh *strictHandler) PostApiMessage(ctx *gin.Context) {
 	request.Body = &body
 
 	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.PostApiMessage(ctx, request.(PostApiMessageRequestObject))
+		return sh.ssi.PostApiMessages(ctx, request.(PostApiMessagesRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "PostApiMessage")
+		handler = middleware(handler, "PostApiMessages")
 	}
 
 	response, err := handler(ctx, request)
@@ -310,8 +533,8 @@ func (sh *strictHandler) PostApiMessage(ctx *gin.Context) {
 	if err != nil {
 		ctx.Error(err)
 		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(PostApiMessageResponseObject); ok {
-		if err := validResponse.VisitPostApiMessageResponse(ctx.Writer); err != nil {
+	} else if validResponse, ok := response.(PostApiMessagesResponseObject); ok {
+		if err := validResponse.VisitPostApiMessagesResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {
@@ -319,17 +542,17 @@ func (sh *strictHandler) PostApiMessage(ctx *gin.Context) {
 	}
 }
 
-// GetApiMessageSearch operation middleware
-func (sh *strictHandler) GetApiMessageSearch(ctx *gin.Context, params GetApiMessageSearchParams) {
-	var request GetApiMessageSearchRequestObject
+// GetApiMessagesSearch operation middleware
+func (sh *strictHandler) GetApiMessagesSearch(ctx *gin.Context, params GetApiMessagesSearchParams) {
+	var request GetApiMessagesSearchRequestObject
 
 	request.Params = params
 
 	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.GetApiMessageSearch(ctx, request.(GetApiMessageSearchRequestObject))
+		return sh.ssi.GetApiMessagesSearch(ctx, request.(GetApiMessagesSearchRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetApiMessageSearch")
+		handler = middleware(handler, "GetApiMessagesSearch")
 	}
 
 	response, err := handler(ctx, request)
@@ -337,8 +560,8 @@ func (sh *strictHandler) GetApiMessageSearch(ctx *gin.Context, params GetApiMess
 	if err != nil {
 		ctx.Error(err)
 		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(GetApiMessageSearchResponseObject); ok {
-		if err := validResponse.VisitGetApiMessageSearchResponse(ctx.Writer); err != nil {
+	} else if validResponse, ok := response.(GetApiMessagesSearchResponseObject); ok {
+		if err := validResponse.VisitGetApiMessagesSearchResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {
@@ -346,17 +569,17 @@ func (sh *strictHandler) GetApiMessageSearch(ctx *gin.Context, params GetApiMess
 	}
 }
 
-// DeleteApiMessageUid operation middleware
-func (sh *strictHandler) DeleteApiMessageUid(ctx *gin.Context, uid string) {
-	var request DeleteApiMessageUidRequestObject
+// DeleteApiMessagesUid operation middleware
+func (sh *strictHandler) DeleteApiMessagesUid(ctx *gin.Context, uid string) {
+	var request DeleteApiMessagesUidRequestObject
 
 	request.Uid = uid
 
 	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteApiMessageUid(ctx, request.(DeleteApiMessageUidRequestObject))
+		return sh.ssi.DeleteApiMessagesUid(ctx, request.(DeleteApiMessagesUidRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteApiMessageUid")
+		handler = middleware(handler, "DeleteApiMessagesUid")
 	}
 
 	response, err := handler(ctx, request)
@@ -364,8 +587,93 @@ func (sh *strictHandler) DeleteApiMessageUid(ctx *gin.Context, uid string) {
 	if err != nil {
 		ctx.Error(err)
 		ctx.Status(http.StatusInternalServerError)
-	} else if validResponse, ok := response.(DeleteApiMessageUidResponseObject); ok {
-		if err := validResponse.VisitDeleteApiMessageUidResponse(ctx.Writer); err != nil {
+	} else if validResponse, ok := response.(DeleteApiMessagesUidResponseObject); ok {
+		if err := validResponse.VisitDeleteApiMessagesUidResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetApiTokens operation middleware
+func (sh *strictHandler) GetApiTokens(ctx *gin.Context) {
+	var request GetApiTokensRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetApiTokens(ctx, request.(GetApiTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetApiTokens")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(GetApiTokensResponseObject); ok {
+		if err := validResponse.VisitGetApiTokensResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PostApiTokens operation middleware
+func (sh *strictHandler) PostApiTokens(ctx *gin.Context) {
+	var request PostApiTokensRequestObject
+
+	var body PostApiTokensJSONRequestBody
+	if err := ctx.ShouldBind(&body); err != nil {
+		ctx.Status(http.StatusBadRequest)
+		ctx.Error(err)
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.PostApiTokens(ctx, request.(PostApiTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostApiTokens")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(PostApiTokensResponseObject); ok {
+		if err := validResponse.VisitPostApiTokensResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteApiTokensId operation middleware
+func (sh *strictHandler) DeleteApiTokensId(ctx *gin.Context, id string) {
+	var request DeleteApiTokensIdRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteApiTokensId(ctx, request.(DeleteApiTokensIdRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteApiTokensId")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(DeleteApiTokensIdResponseObject); ok {
+		if err := validResponse.VisitDeleteApiTokensIdResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {
@@ -376,18 +684,22 @@ func (sh *strictHandler) DeleteApiMessageUid(ctx *gin.Context, uid string) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/7RUQUscTRD9K0t933HiromnuZkIYQ8BQTyJSGemdrdlp3vs7hGWZQ8zm0OiHgIhBIkk",
-	"GCQED5GEBCIG/0yjq/8idLfu7GQm4gZz6+mpqlf93qvqQ8CjmDNkSoLfBxl0MCL2+ASlJG00x1jwGIWi",
-	"aH8EHcIYdtdoaL5UL0bwQSpBWRsGHgScKWSq+p9AojBcI/Z3i4vInCAkCu8pGiF45RwHM45NKFN5GGUK",
-	"2yhMnEQWoqiElcjUVJjJH96WxOGU/Q/GN/zpOgbKVLli9pEl4075/fccDDwQuJFQgSH4KzYorz1uwJt8",
-	"RN7yaokMU4+yFjdIIcpA0FhRzsCH+cVmrcVFLSKMtClr1yLHmjS9UtU1Va6IrC2h2KQB1uYXm+DBJgrp",
-	"aszONGYa5i08RkZiCj48sFcexER1LNt1EtN6NOF1Li1JRhFiemmG4MMil2o+ptcz4UhAqR7ysGc1y0Uh",
-	"cdylgU2tr0vTx/VYmdP/Alvgw3/1fO7qV0NXL/piUORaiQTthYw5k84p9xuzdw3uYItS6OG+Hg51dqKH",
-	"P3X2Q6c7o92Ty52vOn2tsx2dnur0jU7fG6LnGo2ylKNn+2dbxzo91MNDnR3p7JPOjvXwuXWTTKKIiF4Z",
-	"xmHYmEmN6hKJCDoGpY0VSj3GCaGWXKyRW5AIFQoJ/kofqGlrI0HRAw8YiYyZCo7NOSv5vzp7bPypM1uC",
-	"R2tmEgvJt9st1RUV/8t6qyV/NabyF1UYyVsbbYxPhCC9KuOdH+yNvn0YfX95/m7vZrO4yLJZ+gkNB86R",
-	"XXTLtmiXBXufO2bZyv+bXYpdnb3Yutw9ODs6vfiyXxqNz8vNBfCcLGbH5Kq4VVkc6JvsUhZjrjxa5dF0",
-	"3VWO5q3yLz5u6/RAp9s627L5b3X26mbyHaQRcPArAAD//7GyjAdQCAAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
