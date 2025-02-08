@@ -22,7 +22,7 @@
 
 ![Go](https://img.shields.io/badge/go-1.22.0-00ADD8?style=for-the-badge&logo=go&logoColor=white)
 ![Gin](https://img.shields.io/badge/gin-v1.10.0-00ADD8?style=for-the-badge&logo=go&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-5.0-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-v1.17.1-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
 ![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-6BA539?style=for-the-badge&logo=openapi-initiative&logoColor=white)
 
 ### 開発ツール & インフラ
@@ -151,9 +151,47 @@ docker compose exec backend oapi-codegen -config config.yaml /openapi/index.yaml
 
 ### テスト
 
+プロジェクトには以下のテストが含まれています：
+
+- ユニットテスト：ドメインロジックとエンティティのテスト
+- 統合テスト：ハンドラーとリポジトリの統合テスト
+- E2E テスト：API エンドポイントの動作確認
+
+#### ローカルでのテスト実行
+
 ```bash
+# すべてのテストを実行
 go test ./...
+
+# テストカバレッジレポートの生成
+go test -coverprofile=coverage.out ./...
+
+# カバレッジレポートの表示（HTML形式）
+go tool cover -html=coverage.out
+
+# 特定のパッケージのテストを実行
+go test ./internal/domain/message/...
+go test ./internal/adapter/handler/...
 ```
+
+#### コンテナ上でのテスト実行
+
+Docker Compose を使用してコンテナ上でテストを実行できます：
+
+```bash
+# テストコンテナを起動してテストを実行
+docker compose -f compose.test.yml up --build --abort-on-container-exit
+
+# テスト終了後にコンテナを削除
+docker compose -f compose.test.yml down
+```
+
+テスト時の注意事項：
+
+- テストデータベースは自動的に作成・クリーンアップされます
+- モックオブジェクトは `testify/mock` を使用して生成されています
+- 環境変数は自動的にテスト用の値に置き換えられます
+- コンテナ上でのテスト実行時は、専用のテスト用 MongoDB インスタンスが自動的に起動します
 
 ## ライセンス
 

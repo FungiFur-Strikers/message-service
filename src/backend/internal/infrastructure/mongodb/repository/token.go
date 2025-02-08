@@ -1,3 +1,4 @@
+// src\backend\internal\infrastructure\mongodb\repository\token.go
 package repository
 
 import (
@@ -12,12 +13,12 @@ import (
 )
 
 type TokenRepository struct {
-	collection *mongo.Collection
+	collection MongoCollectionInterface
 }
 
-func NewTokenRepository(db *mongo.Database) token.Repository {
+func NewTokenRepository(db *mongo.Database) *TokenRepository {
 	return &TokenRepository{
-		collection: db.Collection("tokens"),
+		collection: NewMongoCollectionWrapper(db.Collection("tokens")),
 	}
 }
 

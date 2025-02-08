@@ -1,0 +1,55 @@
+linters:
+  enable:
+    - gofmt
+    - govet
+    - errcheck
+    - staticcheck
+    - gosimple
+    - ineffassign
+    - unconvert
+    - misspell
+    - unused
+    - gosec
+    - revive
+    - gocyclo
+    - gocritic
+    - bodyclose
+    - dupl
+
+linters-settings:
+  govet:
+    check-shadowing: true
+  gofmt:
+    simplify: true
+  gocyclo:
+    min-complexity: 15
+  dupl:
+    threshold: 100
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+
+run:
+  deadline: 5m
+  tests: true
+  skip-dirs:
+    - vendor/
+    - third_party/
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck
+        - dupl
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true

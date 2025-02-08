@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - MONGODB_URI=mongodb://mongodb-test:27017
+      - MONGODB_NAME=message_service_test
+      - JWT_SECRET=test_secret
+    depends_on:
+      mongodb-test:
+        condition: service_healthy
+
+  mongodb-test:
+    image: mongo:6.0
+    ports:
+      - "27017"
+    environment:
+      - MONGODB_DATABASE=message_service_test
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    command: ["mongod", "--quiet", "--logpath", "/dev/null"]
