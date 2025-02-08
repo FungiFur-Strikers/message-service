@@ -4,115 +4,20 @@ import (
 	"context"
 	"errors"
 	"message-service/internal/domain/message"
-	"reflect"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
-
-// モックカーソル
-type mockCursor struct {
-	mock.Mock
-	messages []message.Message
-	current  int
-}
-
-func (m *mockCursor) Close(ctx context.Context) error {
-	return nil
-}
-
-func (m *mockCursor) Next(ctx context.Context) bool {
-	m.current++
-	return m.current <= len(m.messages)
-}
-
-func (m *mockCursor) Decode(val interface{}) error {
-	if m.current > 0 && m.current <= len(m.messages) {
-		*(val.(*message.Message)) = m.messages[m.current-1]
-	}
-	return nil
-}
-
-func (m *mockCursor) Err() error {
-	return nil
-}
-
-func (m *mockCursor) All(ctx context.Context, results interface{}) error {
-	*(results.(*[]message.Message)) = m.messages
-	return nil
-}
-
-// モックシングルリザルト
-type mockSingleResult struct {
-	mock.Mock
-	err error
-	res interface{}
-}
-
-func (m *mockSingleResult) Decode(v interface{}) error {
-	if m.err != nil {
-		return m.err
-	}
-	if msg, ok := m.res.(*message.Message); ok {
-		*(v.(*message.Message)) = *msg
-	}
-	return nil
-}
-
-func (m *mockSingleResult) Err() error {
-	return m.err
-}
-
-// モックコレクション
-type mockCollection struct {
-	mock.Mock
-}
-
-func (m *mockCollection) InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
-	args := m.Called(ctx, document)
-	return args.Get(0).(*mongo.InsertOneResult), args.Error(1)
-}
-
-func (m *mockCollection) UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
-	args := m.Called(ctx, filter, update)
-	return args.Get(0).(*mongo.UpdateResult), args.Error(1)
-}
-
-func (m *mockCollection) Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
-	args := m.Called(ctx, filter)
-	return args.Get(0).(*mongo.Cursor), args.Error(1)
-}
-
-func (m *mockCollection) FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult {
-	args := m.Called(ctx, filter)
-	if sr, ok := args.Get(0).(*mongo.SingleResult); ok {
-		return sr
-	}
-	if msr, ok := args.Get(0).(*mockSingleResult); ok {
-		return mongo.NewSingleResultFromDocument(msr.res, msr.err, nil)
-	}
-	return mongo.NewSingleResultFromDocument(nil, errors.New("mock error"), nil)
-}
-
-// unsafeSetCollection は非公開フィールドに値を設定するためのヘルパー関数
-func unsafeSetCollection(repo *MessageRepository, mock *mockCollection) {
-	val := reflect.ValueOf(repo).Elem()
-	field := val.FieldByName("collection")
-	ptr := unsafe.Pointer(field.UnsafeAddr())
-	realPtr := (*mongo.Collection)(ptr)
-	*realPtr = *(*mongo.Collection)(unsafe.Pointer(mock))
-}
 
 func TestMessageRepository_Create(t *testing.T) {
 	tests := []struct {
 		name    string
 		msg     *message.Message
-		mockFn  func(*mockCollection)
+		mockFn  func(*TestCollection)
 		wantErr bool
 	}{
 		{
@@ -124,7 +29,7 @@ func TestMessageRepository_Create(t *testing.T) {
 				ChannelID: "test-channel",
 				Content:   "test message",
 			},
-			mockFn: func(m *mockCollection) {
+			mockFn: func(m *TestCollection) {
 				m.On("InsertOne", mock.Anything, mock.AnythingOfType("*message.Message")).
 					Return(&mongo.InsertOneResult{InsertedID: "test-id"}, nil)
 			},
@@ -139,7 +44,7 @@ func TestMessageRepository_Create(t *testing.T) {
 				ChannelID: "test-channel",
 				Content:   "test message",
 			},
-			mockFn: func(m *mockCollection) {
+			mockFn: func(m *TestCollection) {
 				m.On("InsertOne", mock.Anything, mock.AnythingOfType("*message.Message")).
 					Return(&mongo.InsertOneResult{}, mongo.WriteException{})
 			},
@@ -149,10 +54,8 @@ func TestMessageRepository_Create(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestRepository()
 			tt.mockFn(mock)
-			repo := &MessageRepository{}
-			unsafeSetCollection(repo, mock)
 
 			err := repo.Create(context.Background(), tt.msg)
 			if tt.wantErr {
@@ -171,14 +74,16 @@ func TestMessageRepository_Delete(t *testing.T) {
 	tests := []struct {
 		name    string
 		uid     string
-		mockFn  func(*mockCollection)
+		mockFn  func(*TestCollection)
 		wantErr bool
 	}{
 		{
 			name: "正常系：メッセージの削除",
 			uid:  "test-uid",
-			mockFn: func(m *mockCollection) {
-				m.On("UpdateOne", mock.Anything, mock.AnythingOfType("primitive.M"), mock.AnythingOfType("primitive.M")).
+			mockFn: func(m *TestCollection) {
+				m.On("UpdateOne", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["uid"] == "test-uid" && filter["deleted_at"] == nil
+				}), mock.AnythingOfType("primitive.M")).
 					Return(&mongo.UpdateResult{MatchedCount: 1, ModifiedCount: 1}, nil)
 			},
 			wantErr: false,
@@ -186,8 +91,10 @@ func TestMessageRepository_Delete(t *testing.T) {
 		{
 			name: "異常系：存在しないメッセージ",
 			uid:  "non-existent-uid",
-			mockFn: func(m *mockCollection) {
-				m.On("UpdateOne", mock.Anything, mock.AnythingOfType("primitive.M"), mock.AnythingOfType("primitive.M")).
+			mockFn: func(m *TestCollection) {
+				m.On("UpdateOne", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["uid"] == "non-existent-uid" && filter["deleted_at"] == nil
+				}), mock.AnythingOfType("primitive.M")).
 					Return(&mongo.UpdateResult{MatchedCount: 0, ModifiedCount: 0}, nil)
 			},
 			wantErr: true,
@@ -196,10 +103,8 @@ func TestMessageRepository_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestRepository()
 			tt.mockFn(mock)
-			repo := &MessageRepository{}
-			unsafeSetCollection(repo, mock)
 
 			err := repo.Delete(context.Background(), tt.uid)
 			if tt.wantErr {
@@ -227,12 +132,12 @@ func TestMessageRepository_Search(t *testing.T) {
 		},
 	}
 
-	cursor := &mockCursor{messages: mockMessages}
+	cursor := NewTestCursor(mockMessages)
 
 	tests := []struct {
 		name     string
 		criteria message.SearchCriteria
-		mockFn   func(*mockCollection)
+		mockFn   func(*TestCollection)
 		want     []message.Message
 		wantErr  bool
 	}{
@@ -241,9 +146,10 @@ func TestMessageRepository_Search(t *testing.T) {
 			criteria: message.SearchCriteria{
 				ChannelID: stringPtr("test-channel"),
 			},
-			mockFn: func(m *mockCollection) {
-				m.On("Find", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(cursor, nil)
+			mockFn: func(m *TestCollection) {
+				m.On("Find", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["channel_id"] == "test-channel" && filter["deleted_at"] == nil
+				})).Return(cursor, nil)
 			},
 			want:    mockMessages,
 			wantErr: false,
@@ -251,9 +157,10 @@ func TestMessageRepository_Search(t *testing.T) {
 		{
 			name:     "異常系：データベースエラー",
 			criteria: message.SearchCriteria{},
-			mockFn: func(m *mockCollection) {
-				m.On("Find", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(nil, errors.New("database error"))
+			mockFn: func(m *TestCollection) {
+				m.On("Find", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["deleted_at"] == nil
+				})).Return(nil, errors.New("database error"))
 			},
 			want:    nil,
 			wantErr: true,
@@ -262,10 +169,8 @@ func TestMessageRepository_Search(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestRepository()
 			tt.mockFn(mock)
-			repo := &MessageRepository{}
-			unsafeSetCollection(repo, mock)
 
 			got, err := repo.Search(context.Background(), tt.criteria)
 			if tt.wantErr {
@@ -273,6 +178,7 @@ func TestMessageRepository_Search(t *testing.T) {
 				assert.Nil(t, got)
 			} else {
 				assert.NoError(t, err)
+				assert.Equal(t, tt.want, got)
 			}
 			mock.AssertExpectations(t)
 		})
@@ -294,16 +200,17 @@ func TestMessageRepository_FindByUID(t *testing.T) {
 	tests := []struct {
 		name    string
 		uid     string
-		mockFn  func(*mockCollection)
+		mockFn  func(*TestCollection)
 		want    *message.Message
 		wantErr bool
 	}{
 		{
 			name: "正常系：メッセージの取得",
 			uid:  "test-uid",
-			mockFn: func(m *mockCollection) {
-				m.On("FindOne", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(&mockSingleResult{res: mockMessage})
+			mockFn: func(m *TestCollection) {
+				m.On("FindOne", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["uid"] == "test-uid" && filter["deleted_at"] == nil
+				})).Return(NewTestSingleResult(mockMessage, nil))
 			},
 			want:    mockMessage,
 			wantErr: false,
@@ -311,9 +218,10 @@ func TestMessageRepository_FindByUID(t *testing.T) {
 		{
 			name: "異常系：存在しないUID",
 			uid:  "non-existent-uid",
-			mockFn: func(m *mockCollection) {
-				m.On("FindOne", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(&mockSingleResult{err: mongo.ErrNoDocuments})
+			mockFn: func(m *TestCollection) {
+				m.On("FindOne", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["uid"] == "non-existent-uid" && filter["deleted_at"] == nil
+				})).Return(NewTestSingleResult(nil, mongo.ErrNoDocuments))
 			},
 			want:    nil,
 			wantErr: false,
@@ -322,10 +230,8 @@ func TestMessageRepository_FindByUID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestRepository()
 			tt.mockFn(mock)
-			repo := &MessageRepository{}
-			unsafeSetCollection(repo, mock)
 
 			got, err := repo.FindByUID(context.Background(), tt.uid)
 			if tt.wantErr {
@@ -335,7 +241,7 @@ func TestMessageRepository_FindByUID(t *testing.T) {
 				if tt.want == nil {
 					assert.Nil(t, got)
 				} else {
-					assert.Equal(t, tt.want.UID, got.UID)
+					assert.Equal(t, tt.want, got)
 				}
 			}
 			mock.AssertExpectations(t)

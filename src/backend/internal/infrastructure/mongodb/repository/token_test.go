@@ -4,63 +4,29 @@ import (
 	"context"
 	"errors"
 	"message-service/internal/domain/token"
-	"reflect"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// モックカーソル
-type mockTokenCursor struct {
-	mock.Mock
-	tokens  []token.Token
-	current int
-}
-
-func (m *mockTokenCursor) Close(ctx context.Context) error {
-	return nil
-}
-
-func (m *mockTokenCursor) Next(ctx context.Context) bool {
-	m.current++
-	return m.current <= len(m.tokens)
-}
-
-func (m *mockTokenCursor) Decode(val interface{}) error {
-	if m.current > 0 && m.current <= len(m.tokens) {
-		*(val.(*token.Token)) = m.tokens[m.current-1]
-	}
-	return nil
-}
-
-func (m *mockTokenCursor) Err() error {
-	return nil
-}
-
-func (m *mockTokenCursor) All(ctx context.Context, results interface{}) error {
-	*(results.(*[]token.Token)) = m.tokens
-	return nil
-}
-
-// unsafeSetTokenCollection は非公開フィールドに値を設定するためのヘルパー関数
-func unsafeSetTokenCollection(repo *TokenRepository, mock *mockCollection) {
-	val := reflect.ValueOf(repo).Elem()
-	field := val.FieldByName("collection")
-	ptr := unsafe.Pointer(field.UnsafeAddr())
-	realPtr := (*mongo.Collection)(ptr)
-	*realPtr = *(*mongo.Collection)(unsafe.Pointer(mock))
+// NewTestTokenRepository はテスト用のTokenRepositoryを作成します
+func NewTestTokenRepository() (*TokenRepository, *TestCollection) {
+	mock := new(TestCollection)
+	return &TokenRepository{
+		collection: &mongo.Collection{},
+	}, mock
 }
 
 func TestTokenRepository_Create(t *testing.T) {
 	tests := []struct {
 		name    string
 		token   *token.Token
-		mockFn  func(*mockCollection)
+		mockFn  func(*TestCollection)
 		wantErr bool
 	}{
 		{
@@ -70,7 +36,7 @@ func TestTokenRepository_Create(t *testing.T) {
 				Name:      "test-token",
 				ExpiresAt: time.Now().Add(24 * time.Hour),
 			},
-			mockFn: func(m *mockCollection) {
+			mockFn: func(m *TestCollection) {
 				m.On("InsertOne", mock.Anything, mock.AnythingOfType("*token.Token")).
 					Return(&mongo.InsertOneResult{InsertedID: primitive.NewObjectID()}, nil)
 			},
@@ -83,7 +49,7 @@ func TestTokenRepository_Create(t *testing.T) {
 				Name:      "test-token",
 				ExpiresAt: time.Now().Add(24 * time.Hour),
 			},
-			mockFn: func(m *mockCollection) {
+			mockFn: func(m *TestCollection) {
 				m.On("InsertOne", mock.Anything, mock.AnythingOfType("*token.Token")).
 					Return(nil, errors.New("database error"))
 			},
@@ -93,10 +59,8 @@ func TestTokenRepository_Create(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestTokenRepository()
 			tt.mockFn(mock)
-			repo := &TokenRepository{}
-			unsafeSetTokenCollection(repo, mock)
 
 			err := repo.Create(context.Background(), tt.token)
 			if tt.wantErr {
@@ -124,28 +88,30 @@ func TestTokenRepository_List(t *testing.T) {
 		},
 	}
 
-	cursor := &mockTokenCursor{tokens: mockTokens}
+	cursor := NewTestCursor(mockTokens)
 
 	tests := []struct {
 		name    string
-		mockFn  func(*mockCollection)
+		mockFn  func(*TestCollection)
 		want    []token.Token
 		wantErr bool
 	}{
 		{
 			name: "正常系：トークン一覧取得",
-			mockFn: func(m *mockCollection) {
-				m.On("Find", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(cursor, nil)
+			mockFn: func(m *TestCollection) {
+				m.On("Find", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["deleted_at"] == nil
+				})).Return(cursor, nil)
 			},
 			want:    mockTokens,
 			wantErr: false,
 		},
 		{
 			name: "異常系：データベースエラー",
-			mockFn: func(m *mockCollection) {
-				m.On("Find", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(nil, errors.New("database error"))
+			mockFn: func(m *TestCollection) {
+				m.On("Find", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["deleted_at"] == nil
+				})).Return(nil, errors.New("database error"))
 			},
 			want:    nil,
 			wantErr: true,
@@ -154,10 +120,8 @@ func TestTokenRepository_List(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestTokenRepository()
 			tt.mockFn(mock)
-			repo := &TokenRepository{}
-			unsafeSetTokenCollection(repo, mock)
 
 			got, err := repo.List(context.Background())
 			if tt.wantErr {
@@ -177,14 +141,16 @@ func TestTokenRepository_Delete(t *testing.T) {
 	tests := []struct {
 		name    string
 		id      string
-		mockFn  func(*mockCollection)
+		mockFn  func(*TestCollection)
 		wantErr bool
 	}{
 		{
 			name: "正常系：トークンの削除",
 			id:   validID.Hex(),
-			mockFn: func(m *mockCollection) {
-				m.On("UpdateOne", mock.Anything, mock.AnythingOfType("primitive.M"), mock.AnythingOfType("primitive.M")).
+			mockFn: func(m *TestCollection) {
+				m.On("UpdateOne", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["_id"] == validID && filter["deleted_at"] == nil
+				}), mock.AnythingOfType("primitive.M")).
 					Return(&mongo.UpdateResult{MatchedCount: 1, ModifiedCount: 1}, nil)
 			},
 			wantErr: false,
@@ -192,7 +158,7 @@ func TestTokenRepository_Delete(t *testing.T) {
 		{
 			name: "異常系：存在しないトークン",
 			id:   primitive.NewObjectID().Hex(),
-			mockFn: func(m *mockCollection) {
+			mockFn: func(m *TestCollection) {
 				m.On("UpdateOne", mock.Anything, mock.AnythingOfType("primitive.M"), mock.AnythingOfType("primitive.M")).
 					Return(&mongo.UpdateResult{MatchedCount: 0, ModifiedCount: 0}, nil)
 			},
@@ -201,17 +167,15 @@ func TestTokenRepository_Delete(t *testing.T) {
 		{
 			name:    "異常系：無効なID形式",
 			id:      "invalid-id",
-			mockFn:  func(m *mockCollection) {},
+			mockFn:  func(m *TestCollection) {},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestTokenRepository()
 			tt.mockFn(mock)
-			repo := &TokenRepository{}
-			unsafeSetTokenCollection(repo, mock)
 
 			err := repo.Delete(context.Background(), tt.id)
 			if tt.wantErr {
@@ -238,16 +202,17 @@ func TestTokenRepository_FindByToken(t *testing.T) {
 	tests := []struct {
 		name        string
 		tokenString string
-		mockFn      func(*mockCollection)
+		mockFn      func(*TestCollection)
 		want        *token.Token
 		wantErr     bool
 	}{
 		{
 			name:        "正常系：トークンの取得",
 			tokenString: "test-token-value",
-			mockFn: func(m *mockCollection) {
-				m.On("FindOne", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(&mockSingleResult{res: mockToken})
+			mockFn: func(m *TestCollection) {
+				m.On("FindOne", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["token"] == "test-token-value" && filter["deleted_at"] == nil
+				})).Return(NewTestSingleResult(mockToken, nil))
 			},
 			want:    mockToken,
 			wantErr: false,
@@ -255,9 +220,10 @@ func TestTokenRepository_FindByToken(t *testing.T) {
 		{
 			name:        "異常系：存在しないトークン",
 			tokenString: "non-existent-token",
-			mockFn: func(m *mockCollection) {
-				m.On("FindOne", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(&mockSingleResult{err: mongo.ErrNoDocuments})
+			mockFn: func(m *TestCollection) {
+				m.On("FindOne", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["token"] == "non-existent-token" && filter["deleted_at"] == nil
+				})).Return(NewTestSingleResult(nil, mongo.ErrNoDocuments))
 			},
 			want:    nil,
 			wantErr: false,
@@ -266,10 +232,8 @@ func TestTokenRepository_FindByToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestTokenRepository()
 			tt.mockFn(mock)
-			repo := &TokenRepository{}
-			unsafeSetTokenCollection(repo, mock)
 
 			got, err := repo.FindByToken(context.Background(), tt.tokenString)
 			if tt.wantErr {
@@ -302,16 +266,17 @@ func TestTokenRepository_FindByID(t *testing.T) {
 	tests := []struct {
 		name    string
 		id      string
-		mockFn  func(*mockCollection)
+		mockFn  func(*TestCollection)
 		want    *token.Token
 		wantErr bool
 	}{
 		{
 			name: "正常系：トークンの取得",
 			id:   validID.Hex(),
-			mockFn: func(m *mockCollection) {
-				m.On("FindOne", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(&mockSingleResult{res: mockToken})
+			mockFn: func(m *TestCollection) {
+				m.On("FindOne", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
+					return filter["_id"] == validID && filter["deleted_at"] == nil
+				})).Return(NewTestSingleResult(mockToken, nil))
 			},
 			want:    mockToken,
 			wantErr: false,
@@ -319,9 +284,9 @@ func TestTokenRepository_FindByID(t *testing.T) {
 		{
 			name: "異常系：存在しないトークン",
 			id:   primitive.NewObjectID().Hex(),
-			mockFn: func(m *mockCollection) {
+			mockFn: func(m *TestCollection) {
 				m.On("FindOne", mock.Anything, mock.AnythingOfType("primitive.M")).
-					Return(&mockSingleResult{err: mongo.ErrNoDocuments})
+					Return(NewTestSingleResult(nil, mongo.ErrNoDocuments))
 			},
 			want:    nil,
 			wantErr: false,
@@ -329,7 +294,7 @@ func TestTokenRepository_FindByID(t *testing.T) {
 		{
 			name:    "異常系：無効なID形式",
 			id:      "invalid-id",
-			mockFn:  func(m *mockCollection) {},
+			mockFn:  func(m *TestCollection) {},
 			want:    nil,
 			wantErr: true,
 		},
@@ -337,10 +302,8 @@ func TestTokenRepository_FindByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := new(mockCollection)
+			repo, mock := NewTestTokenRepository()
 			tt.mockFn(mock)
-			repo := &TokenRepository{}
-			unsafeSetTokenCollection(repo, mock)
 
 			got, err := repo.FindByID(context.Background(), tt.id)
 			if tt.wantErr {
