@@ -46,22 +46,6 @@ func (m *TestCollection) Find(ctx context.Context, filter interface{}, opts ...*
 	return nil, args.Error(1)
 }
 
-// mockSingleResult は SingleResult のモック実装
-type mockSingleResult struct {
-	result interface{}
-	err    error
-}
-
-func (m *mockSingleResult) Decode(v interface{}) error {
-	if m.err != nil {
-		return m.err
-	}
-	if m.result == nil {
-		return mongo.ErrNoDocuments
-	}
-	return copyValue(v, m.result)
-}
-
 // FindOne モックメソッド
 func (m *TestCollection) FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) SingleResult {
 	args := m.Called(ctx, filter)
@@ -113,6 +97,22 @@ func NewTestCursor[T any](results []T) CursorInterface {
 	}
 }
 
+// mockSingleResult は SingleResult のモック実装
+type mockSingleResult struct {
+	result interface{}
+	err    error
+}
+
+func (m *mockSingleResult) Decode(v interface{}) error {
+	if m.err != nil {
+		return m.err
+	}
+	if m.result == nil {
+		return mongo.ErrNoDocuments
+	}
+	return copyValue(v, m.result)
+}
+
 // NewTestSingleResult はテスト用の SingleResult を作成
 func NewTestSingleResult(response interface{}, err error) *mockSingleResult {
 	return &mockSingleResult{
@@ -121,7 +121,7 @@ func NewTestSingleResult(response interface{}, err error) *mockSingleResult {
 	}
 }
 
-// テストヘルパー関数
+// copyValue はインターフェースの値をコピーするヘルパー関数
 func copyValue(dst interface{}, src interface{}) error {
 	dstVal := reflect.ValueOf(dst)
 	if dstVal.Kind() != reflect.Ptr {
@@ -131,59 +131,80 @@ func copyValue(dst interface{}, src interface{}) error {
 
 	switch dstVal.Kind() {
 	case reflect.Struct:
-		// 構造体の場合（単一の Token または Message）
-		switch v := dst.(type) {
-		case *token.Token:
-			if srcVal, ok := src.(*token.Token); ok {
-				*v = *srcVal
-				return nil
-			}
-		case *message.Message:
-			if srcVal, ok := src.(*message.Message); ok {
-				*v = *srcVal
-				return nil
-			}
-		}
+		return copyStruct(dst, src)
 	case reflect.Slice:
-		// スライスの場合（Token または Message のスライス）
-		switch src := src.(type) {
-		case []token.Token:
-			if tokens, ok := dst.(*[]token.Token); ok {
-				*tokens = make([]token.Token, len(src))
-				copy(*tokens, src)
-				return nil
-			}
-		case []message.Message:
-			if messages, ok := dst.(*[]message.Message); ok {
-				*messages = make([]message.Message, len(src))
-				copy(*messages, src)
-				return nil
-			}
-		case []interface{}:
-			// インターフェースのスライスの場合
-			switch dstType := reflect.TypeOf(dst).Elem(); dstType.Elem().String() {
-			case "token.Token":
-				tokens := make([]token.Token, len(src))
-				for i, item := range src {
-					if token, ok := item.(*token.Token); ok {
-						tokens[i] = *token
-					}
-				}
-				reflect.ValueOf(dst).Elem().Set(reflect.ValueOf(tokens))
-				return nil
-			case "message.Message":
-				messages := make([]message.Message, len(src))
-				for i, item := range src {
-					if message, ok := item.(*message.Message); ok {
-						messages[i] = *message
-					}
-				}
-				reflect.ValueOf(dst).Elem().Set(reflect.ValueOf(messages))
-				return nil
-			}
+		return copySlice(dst, src)
+	default:
+		return fmt.Errorf("unsupported type for copy")
+	}
+}
+
+// copyStruct は構造体をコピーする
+func copyStruct(dst interface{}, src interface{}) error {
+	switch v := dst.(type) {
+	case *token.Token:
+		if srcVal, ok := src.(*token.Token); ok {
+			*v = *srcVal
+			return nil
+		}
+	case *message.Message:
+		if srcVal, ok := src.(*message.Message); ok {
+			*v = *srcVal
+			return nil
 		}
 	}
-	return fmt.Errorf("unsupported type for copy")
+	return fmt.Errorf("unsupported struct type for copy")
+}
+
+// copySlice はスライスをコピーする
+func copySlice(dst interface{}, src interface{}) error {
+	if tokens, ok := dst.(*[]token.Token); ok {
+		if srcSlice, ok := src.([]token.Token); ok {
+			*tokens = make([]token.Token, len(srcSlice))
+			copy(*tokens, srcSlice)
+			return nil
+		}
+		return copyInterfaceSlice(tokens, src)
+	}
+	if messages, ok := dst.(*[]message.Message); ok {
+		if srcSlice, ok := src.([]message.Message); ok {
+			*messages = make([]message.Message, len(srcSlice))
+			copy(*messages, srcSlice)
+			return nil
+		}
+		return copyInterfaceSlice(messages, src)
+	}
+	return fmt.Errorf("unsupported slice type for copy")
+}
+
+// copyInterfaceSlice はインターフェーススライスをコピーする
+func copyInterfaceSlice(dst interface{}, src interface{}) error {
+	srcVal := reflect.ValueOf(src)
+	if srcVal.Kind() != reflect.Slice {
+		return fmt.Errorf("source must be a slice")
+	}
+
+	switch d := dst.(type) {
+	case *[]token.Token:
+		tokens := make([]token.Token, srcVal.Len())
+		for i := 0; i < srcVal.Len(); i++ {
+			if token, ok := srcVal.Index(i).Interface().(*token.Token); ok {
+				tokens[i] = *token
+			}
+		}
+		*d = tokens
+		return nil
+	case *[]message.Message:
+		messages := make([]message.Message, srcVal.Len())
+		for i := 0; i < srcVal.Len(); i++ {
+			if message, ok := srcVal.Index(i).Interface().(*message.Message); ok {
+				messages[i] = *message
+			}
+		}
+		*d = messages
+		return nil
+	}
+	return fmt.Errorf("unsupported interface slice type")
 }
 
 // NewTestTokenRepository はテスト用のTokenRepositoryを作成
