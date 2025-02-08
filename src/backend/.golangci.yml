@@ -1,7 +1,6 @@
 linters:
   enable:
     - gofmt
-    - golint
     - govet
     - errcheck
     - staticcheck
@@ -9,19 +8,28 @@ linters:
     - ineffassign
     - unconvert
     - misspell
-    - deadcode
+    - unused
     - gosec
+    - revive
+    - gocyclo
+    - gocritic
+    - bodyclose
+    - dupl
 
 linters-settings:
   govet:
     check-shadowing: true
-  golint:
-    min-confidence: 0.8
   gofmt:
     simplify: true
-  deadcode:
-    skip-files:
-      - "*_test.go"
+  gocyclo:
+    min-complexity: 15
+  dupl:
+    threshold: 100
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
 
 run:
   deadline: 5m
@@ -36,6 +44,7 @@ issues:
       linters:
         - gosec
         - errcheck
+        - dupl
 
   max-issues-per-linter: 0
   max-same-issues: 0
