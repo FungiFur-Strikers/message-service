@@ -11,6 +11,10 @@ jobs:
   test-and-lint:
     name: Test and Lint
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+      contents: read
 
     services:
       mongodb:
