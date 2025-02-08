@@ -1,0 +1,89 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "src/backend/**"
+      - ".github/workflows/**"
+
+jobs:
+  test-and-lint:
+    name: Test and Lint
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:4.4
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: example
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+          cache: true
+
+      - name: Install dependencies
+        working-directory: ./src/backend
+        run: go mod download
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          working-directory: ./src/backend
+
+      - name: Run linter
+        working-directory: ./src/backend
+        run: golangci-lint run ./...
+
+      - name: Run tests with coverage
+        working-directory: ./src/backend
+        run: |
+          go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+          go tool cover -func=coverage.txt
+
+      - name: Build
+        working-directory: ./src/backend
+        run: go build -v ./...
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: ./src/backend/coverage.txt
+
+      - name: Comment PR
+        uses: actions/github-script@v6
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+            const { status } = require('process');
+
+            let summary = `### CI Results\n\n`;
+
+            if (status === 0) {
+              summary += `✅ All checks passed successfully!\n\n`;
+            } else {
+              summary += `❌ Some checks failed. Please review the details below.\n\n`;
+            }
+
+            if (fs.existsSync('./src/backend/coverage.txt')) {
+              const coverage = fs.readFileSync('./src/backend/coverage.txt', 'utf8');
+              summary += `#### Test Coverage\n\`\`\`\n${coverage}\n\`\`\`\n\n`;
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
