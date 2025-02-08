@@ -34,6 +34,10 @@ jobs:
           go-version: "1.21"
           cache: true
 
+      - name: Ensure dependencies file
+        working-directory: ./src/backend
+        run: go mod tidy
+
       - name: Install dependencies
         working-directory: ./src/backend
         run: go mod download
