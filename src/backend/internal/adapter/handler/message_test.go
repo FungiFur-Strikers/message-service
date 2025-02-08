@@ -146,9 +146,9 @@ func TestMessageHandler_PostApiMessages(t *testing.T) {
 				assert.NoError(t, err)
 				response, ok := resp.(api.PostApiMessages201JSONResponse)
 				assert.True(t, ok)
-				assert.Equal(t, tt.request.Body.Uid, response.Uid)
-				assert.Equal(t, tt.request.Body.ChannelId, response.ChannelId)
-				assert.Equal(t, tt.request.Body.Content, response.Content)
+				assert.Equal(t, tt.request.Body.Uid, *response.Uid)
+				assert.Equal(t, tt.request.Body.ChannelId, *response.ChannelId)
+				assert.Equal(t, tt.request.Body.Content, *response.Content)
 			}
 			mockRepo.AssertExpectations(t)
 		})
