@@ -1,3 +1,4 @@
+// src\backend\internal\infrastructure\mongodb\index.go
 package mongodb
 
 import (
@@ -51,8 +52,13 @@ func (m *MongoIndexView) CreateMany(ctx context.Context, models []mongo.IndexMod
 }
 
 // NewDatabase は*mongo.DatabaseからDatabaseインターフェースを作成
-func NewDatabase(db *mongo.Database) Database {
-	return &MongoDatabase{db: db}
+func NewDatabase(db interface{}) Database {
+	switch d := db.(type) {
+	case *mongo.Database:
+		return &MongoDatabase{db: d}
+	default:
+		return db.(Database)
+	}
 }
 
 func CreateIndexes(ctx context.Context, db Database) error {

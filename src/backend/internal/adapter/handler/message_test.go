@@ -12,37 +12,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// モックリポジトリの定義
-type mockMessageRepository struct {
-	mock.Mock
-}
-
-func (m *mockMessageRepository) Create(ctx context.Context, msg *message.Message) error {
-	args := m.Called(ctx, msg)
-	return args.Error(0)
-}
-
-func (m *mockMessageRepository) Delete(ctx context.Context, uid string) error {
-	args := m.Called(ctx, uid)
-	return args.Error(0)
-}
-
-func (m *mockMessageRepository) Search(ctx context.Context, criteria message.SearchCriteria) ([]message.Message, error) {
-	args := m.Called(ctx, criteria)
-	if msgs, ok := args.Get(0).([]message.Message); ok {
-		return msgs, args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *mockMessageRepository) FindByUID(ctx context.Context, uid string) (*message.Message, error) {
-	args := m.Called(ctx, uid)
-	if msg, ok := args.Get(0).(*message.Message); ok {
-		return msg, args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
 // テストヘルパー関数
 func createTestMessage() *message.Message {
 	now := time.Now()

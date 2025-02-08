@@ -1,4 +1,4 @@
-// collection.go
+// src\backend\internal\infrastructure\mongodb\repository\collection.go
 
 package repository
 
@@ -30,10 +30,22 @@ type MongoCollectionInterface interface {
 	FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) SingleResult
 }
 
-// 以下は既存のコード
 // MongoCursorWrapper は実際のmongo.Cursorをラップする構造体
 type MongoCursorWrapper struct {
-	*mongo.Cursor
+	Cursor CursorInterface // *mongo.Cursor の代わりに CursorInterface を使用
+}
+
+// CursorInterface の実装
+func (w *MongoCursorWrapper) Next(ctx context.Context) bool {
+	return w.Cursor.Next(ctx)
+}
+
+func (w *MongoCursorWrapper) Decode(val interface{}) error {
+	return w.Cursor.Decode(val)
+}
+
+func (w *MongoCursorWrapper) Close(ctx context.Context) error {
+	return w.Cursor.Close(ctx)
 }
 
 func (w *MongoCursorWrapper) All(ctx context.Context, results interface{}) error {

@@ -13,45 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// モックリポジトリの定義
-type mockTokenRepository struct {
-	mock.Mock
-}
-
-func (m *mockTokenRepository) Create(ctx context.Context, token *token.Token) error {
-	args := m.Called(ctx, token)
-	return args.Error(0)
-}
-
-func (m *mockTokenRepository) Delete(ctx context.Context, id string) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *mockTokenRepository) List(ctx context.Context) ([]token.Token, error) {
-	args := m.Called(ctx)
-	if tokens, ok := args.Get(0).([]token.Token); ok {
-		return tokens, args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *mockTokenRepository) FindByID(ctx context.Context, id string) (*token.Token, error) {
-	args := m.Called(ctx, id)
-	if tkn, ok := args.Get(0).(*token.Token); ok {
-		return tkn, args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *mockTokenRepository) FindByToken(ctx context.Context, tokenString string) (*token.Token, error) {
-	args := m.Called(ctx, tokenString)
-	if tkn, ok := args.Get(0).(*token.Token); ok {
-		return tkn, args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
 // テストヘルパー関数
 func createTestToken() *token.Token {
 	now := time.Now()
