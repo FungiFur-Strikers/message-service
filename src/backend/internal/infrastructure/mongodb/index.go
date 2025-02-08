@@ -8,7 +8,54 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func CreateIndexes(ctx context.Context, db *mongo.Database) error {
+// Database インターフェース
+type Database interface {
+	Collection(name string) Collection
+}
+
+// Collection インターフェース
+type Collection interface {
+	Indexes() IndexView
+}
+
+// IndexView インターフェース
+type IndexView interface {
+	CreateMany(ctx context.Context, models []mongo.IndexModel, opts ...*options.CreateIndexesOptions) ([]string, error)
+}
+
+// MongoDatabase は実際のmongo.Databaseのラッパー
+type MongoDatabase struct {
+	db *mongo.Database
+}
+
+func (m *MongoDatabase) Collection(name string) Collection {
+	return &MongoCollection{coll: m.db.Collection(name)}
+}
+
+// MongoCollection は実際のmongo.Collectionのラッパー
+type MongoCollection struct {
+	coll *mongo.Collection
+}
+
+func (m *MongoCollection) Indexes() IndexView {
+	return &MongoIndexView{view: m.coll.Indexes()}
+}
+
+// MongoIndexView は実際のmongo.IndexViewのラッパー
+type MongoIndexView struct {
+	view mongo.IndexView
+}
+
+func (m *MongoIndexView) CreateMany(ctx context.Context, models []mongo.IndexModel, opts ...*options.CreateIndexesOptions) ([]string, error) {
+	return m.view.CreateMany(ctx, models, opts...)
+}
+
+// NewDatabase は*mongo.DatabaseからDatabaseインターフェースを作成
+func NewDatabase(db *mongo.Database) Database {
+	return &MongoDatabase{db: db}
+}
+
+func CreateIndexes(ctx context.Context, db Database) error {
 	// メッセージコレクションのインデックス
 	messageIndexes := []mongo.IndexModel{
 		{
