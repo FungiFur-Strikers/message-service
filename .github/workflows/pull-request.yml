@@ -55,7 +55,10 @@ jobs:
       - name: Run tests with coverage
         working-directory: ./src/backend
         run: |
-          go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+          # main.goとapi.gen.goを除外してカバレッジを取得
+          go test -v -race $(go list ./... | grep -v /cmd/ | grep -v /pkg/api) -coverprofile=coverage.txt -covermode=atomic
+          # または
+          # go test -v -race ./internal/... -coverprofile=coverage.txt -covermode=atomic
           go tool cover -func=coverage.txt
 
       - name: Build
