@@ -1,3 +1,4 @@
+// src\backend\internal\infrastructure\mongodb\repository\token_test.go
 package repository
 
 import (
@@ -13,14 +14,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
-
-// NewTestTokenRepository はテスト用のTokenRepositoryを作成します
-func NewTestTokenRepository() (*TokenRepository, *TestCollection) {
-	mock := new(TestCollection)
-	return &TokenRepository{
-		collection: &mongo.Collection{},
-	}, mock
-}
 
 func TestTokenRepository_Create(t *testing.T) {
 	tests := []struct {

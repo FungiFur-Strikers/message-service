@@ -157,7 +157,7 @@ docker compose exec backend oapi-codegen -config config.yaml /openapi/index.yaml
 - 統合テスト：ハンドラーとリポジトリの統合テスト
 - E2E テスト：API エンドポイントの動作確認
 
-テストの実行：
+#### ローカルでのテスト実行
 
 ```bash
 # すべてのテストを実行
@@ -174,11 +174,24 @@ go test ./internal/domain/message/...
 go test ./internal/adapter/handler/...
 ```
 
+#### コンテナ上でのテスト実行
+
+Docker Compose を使用してコンテナ上でテストを実行できます：
+
+```bash
+# テストコンテナを起動してテストを実行
+docker compose -f compose.test.yml up --build --abort-on-container-exit
+
+# テスト終了後にコンテナを削除
+docker compose -f compose.test.yml down
+```
+
 テスト時の注意事項：
 
 - テストデータベースは自動的に作成・クリーンアップされます
 - モックオブジェクトは `testify/mock` を使用して生成されています
 - 環境変数は自動的にテスト用の値に置き換えられます
+- コンテナ上でのテスト実行時は、専用のテスト用 MongoDB インスタンスが自動的に起動します
 
 ## ライセンス
 

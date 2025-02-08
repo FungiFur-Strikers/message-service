@@ -11,12 +11,12 @@ import (
 )
 
 type MessageRepository struct {
-	collection *mongo.Collection
+	collection MongoCollectionInterface
 }
 
 func NewMessageRepository(db *mongo.Database) message.Repository {
 	return &MessageRepository{
-		collection: db.Collection("messages"),
+		collection: NewMongoCollectionWrapper(db.Collection("messages")),
 	}
 }
 
