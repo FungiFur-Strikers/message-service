@@ -151,6 +151,8 @@ docker compose exec backend oapi-codegen -config config.yaml /openapi/index.yaml
 
 ### テスト
 
+[![Pull Request Checks](https://github.com/FungiFur-Strikers/message-service/actions/workflows/pull-request.yml/badge.svg)](https://github.com/FungiFur-Strikers/message-service/actions/workflows/pull-request.yml)
+
 プロジェクトには以下のテストが含まれています：
 
 - ユニットテスト：ドメインロジックとエンティティのテスト

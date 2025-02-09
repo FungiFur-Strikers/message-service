@@ -51,6 +51,18 @@ func (m *MongoIndexView) CreateMany(ctx context.Context, models []mongo.IndexMod
 	return m.view.CreateMany(ctx, models, opts...)
 }
 
+// IndexClient はインデックス操作を管理するクライアント
+type IndexClient struct {
+	db *mongo.Database
+}
+
+// NewIndexClient は新しいIndexClientを作成します
+func NewIndexClient(db *mongo.Database) *IndexClient {
+	return &IndexClient{
+		db: db,
+	}
+}
+
 // NewDatabase は*mongo.DatabaseからDatabaseインターフェースを作成
 func NewDatabase(db interface{}) Database {
 	switch d := db.(type) {

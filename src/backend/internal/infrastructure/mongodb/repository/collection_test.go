@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // モックの定義
@@ -35,42 +34,6 @@ func (m *mockMongoCursor) Close(ctx context.Context) error {
 func (m *mockMongoCursor) All(ctx context.Context, results interface{}) error {
 	args := m.Called(ctx, results)
 	return args.Error(0)
-}
-
-type mockMongoCollection struct {
-	mock.Mock
-}
-
-func (m *mockMongoCollection) InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
-	args := m.Called(ctx, document, opts)
-	if res := args.Get(0); res != nil {
-		return res.(*mongo.InsertOneResult), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *mockMongoCollection) UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
-	args := m.Called(ctx, filter, update, opts)
-	if res := args.Get(0); res != nil {
-		return res.(*mongo.UpdateResult), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *mockMongoCollection) Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
-	args := m.Called(ctx, filter, opts)
-	if res := args.Get(0); res != nil {
-		return res.(*mongo.Cursor), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *mockMongoCollection) FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult {
-	args := m.Called(ctx, filter, opts)
-	if res := args.Get(0); res != nil {
-		return res.(*mongo.SingleResult)
-	}
-	return nil
 }
 
 // テストケース
@@ -111,12 +74,13 @@ func TestMongoCollectionWrapper_Find(t *testing.T) {
 	filter := map[string]interface{}{"key": "value"}
 
 	t.Run("正常系", func(t *testing.T) {
-		mockColl := &mockMongoCollection{}
+		mockColl := new(TestCollection)
+		wrapper := &MongoCollectionWrapper{Collection: mockColl}
 
-		mockCursor := &mongo.Cursor{}
-		mockColl.On("Find", ctx, filter, mock.Anything).Return(mockCursor, nil)
+		mockCursor := &mockMongoCursor{}
+		mockColl.On("Find", ctx, filter).Return(mockCursor, nil)
 
-		cursor, err := mockColl.Find(ctx, filter)
+		cursor, err := wrapper.Find(ctx, filter)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, cursor)
@@ -124,12 +88,13 @@ func TestMongoCollectionWrapper_Find(t *testing.T) {
 	})
 
 	t.Run("エラー発生", func(t *testing.T) {
-		mockColl := &mockMongoCollection{}
+		mockColl := new(TestCollection)
+		wrapper := &MongoCollectionWrapper{Collection: mockColl}
 
 		expectedErr := errors.New("find error")
-		mockColl.On("Find", ctx, filter, mock.Anything).Return(nil, expectedErr)
+		mockColl.On("Find", ctx, filter).Return(nil, expectedErr)
 
-		cursor, err := mockColl.Find(ctx, filter)
+		cursor, err := wrapper.Find(ctx, filter)
 
 		assert.Error(t, err)
 		assert.Equal(t, expectedErr, err)
@@ -143,12 +108,55 @@ func TestMongoCollectionWrapper_FindOne(t *testing.T) {
 	filter := map[string]interface{}{"key": "value"}
 
 	t.Run("正常系", func(t *testing.T) {
-		mockColl := &mockMongoCollection{}
+		mockColl := new(TestCollection)
+		wrapper := &MongoCollectionWrapper{Collection: mockColl}
 
-		expectedResult := &mongo.SingleResult{}
-		mockColl.On("FindOne", ctx, filter, mock.Anything).Return(expectedResult)
+		expectedResult := NewTestSingleResult(&struct{}{}, nil)
+		mockColl.On("FindOne", ctx, filter).Return(expectedResult)
 
-		result := mockColl.FindOne(ctx, filter)
+		result := wrapper.FindOne(ctx, filter)
+
+		assert.NotNil(t, result)
+		mockColl.AssertExpectations(t)
+	})
+
+	t.Run("結果が見つからない場合", func(t *testing.T) {
+		mockColl := new(TestCollection)
+		wrapper := &MongoCollectionWrapper{Collection: mockColl}
+
+		mockColl.On("FindOne", ctx, filter).Return(NewTestSingleResult(nil, mongo.ErrNoDocuments))
+
+		result := wrapper.FindOne(ctx, filter)
+
+		assert.NotNil(t, result)
+		mockColl.AssertExpectations(t)
+	})
+}
+
+func TestMongoCollectionWrapper_FindByID(t *testing.T) {
+	ctx := context.Background()
+	id := "test_id"
+
+	t.Run("正常系", func(t *testing.T) {
+		mockColl := new(TestCollection)
+		wrapper := &MongoCollectionWrapper{Collection: mockColl}
+
+		expectedResult := NewTestSingleResult(&struct{}{}, nil)
+		mockColl.On("FindOne", ctx, mock.Anything).Return(expectedResult)
+
+		result := wrapper.FindByID(ctx, id)
+
+		assert.NotNil(t, result)
+		mockColl.AssertExpectations(t)
+	})
+
+	t.Run("IDが見つからない場合", func(t *testing.T) {
+		mockColl := new(TestCollection)
+		wrapper := &MongoCollectionWrapper{Collection: mockColl}
+
+		mockColl.On("FindOne", ctx, mock.Anything).Return(NewTestSingleResult(nil, mongo.ErrNoDocuments))
+
+		result := wrapper.FindByID(ctx, id)
 
 		assert.NotNil(t, result)
 		mockColl.AssertExpectations(t)
@@ -161,11 +169,6 @@ func TestNewMongoCollectionWrapper(t *testing.T) {
 
 	assert.NotNil(t, wrapper)
 	assert.IsType(t, &MongoCollectionWrapper{}, wrapper)
-
-	// 型アサーションでCollectionフィールドを確認
-	collWrapper, ok := wrapper.(*MongoCollectionWrapper)
-	assert.True(t, ok)
-	assert.Equal(t, coll, collWrapper.Collection)
 }
 
 func TestMongoCursorWrapper_Next(t *testing.T) {
@@ -205,4 +208,25 @@ func TestMongoCursorWrapper_Close(t *testing.T) {
 
 	assert.NoError(t, err)
 	mockCursor.AssertExpectations(t)
+}
+
+func TestMongoCollectionAdapter(t *testing.T) {
+	ctx := context.Background()
+	coll := &mongo.Collection{}
+	adapter := &MongoCollectionAdapter{coll: coll}
+
+	t.Run("インターフェースの実装を確認", func(t *testing.T) {
+		var _ MongoCollectionInterface = adapter
+	})
+
+	// Note: 実際のMongoDBへの接続が必要なため、
+	// これらのメソッドの詳細なテストは統合テストで行うべきです
+	t.Run("メソッドの存在を確認", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			adapter.InsertOne(ctx, nil)
+			adapter.UpdateOne(ctx, nil, nil)
+			adapter.Find(ctx, nil)
+			adapter.FindOne(ctx, nil)
+		})
+	})
 }

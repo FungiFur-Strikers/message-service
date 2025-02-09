@@ -51,6 +51,24 @@ func (c *customDatabase) Collection(name string) Collection {
 	return args.Get(0).(Collection)
 }
 
+func TestNewIndexClient(t *testing.T) {
+	t.Run("正常系：新しいIndexClientが作成される", func(t *testing.T) {
+		// テスト用のデータベースを作成
+		db := &mongo.Database{}
+
+		// NewIndexClientを呼び出し
+		client := NewIndexClient(db)
+
+		// 戻り値の型を確認
+		assert.NotNil(t, client)
+		assert.IsType(t, &IndexClient{}, client)
+
+		// インスタンスが正しく作成されていることを確認
+		assert.NotNil(t, client)
+		assert.IsType(t, &IndexClient{}, client)
+	})
+}
+
 func TestNewDatabase(t *testing.T) {
 	t.Run("*mongo.Databaseケース", func(t *testing.T) {
 		// *mongo.Databaseを渡した場合
