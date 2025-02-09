@@ -43,6 +43,7 @@ func TestTokenHandler_PostApiTokens(t *testing.T) {
 		expectedError bool
 		expectedCode  int
 		errorMessage  string
+		randReadErr   error // 追加：rand.Read()のエラーをシミュレート
 	}{
 		{
 			name:    "正常系：デフォルト有効期限でトークン生成",
@@ -105,6 +106,17 @@ func TestTokenHandler_PostApiTokens(t *testing.T) {
 			expectedCode:  400,
 			errorMessage:  "token name too long",
 		},
+		{
+			name:    "異常系：rand.Read()エラー",
+			request: createTestTokenRequest(nil),
+			mockSetup: func(m *mockTokenRepository) {
+				// このケースではCreateは呼ばれない
+			},
+			expectedError: true,
+			expectedCode:  400,
+			errorMessage:  "failed to generate token",
+			randReadErr:   errors.New("failed to generate token"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -112,6 +124,15 @@ func TestTokenHandler_PostApiTokens(t *testing.T) {
 			mockRepo := new(mockTokenRepository)
 			tt.mockSetup(mockRepo)
 			handler := NewTokenHandler(mockRepo)
+
+			// rand.Read()のモック
+			if tt.randReadErr != nil {
+				oldRandRead := randRead
+				randRead = func(b []byte) (n int, err error) {
+					return 0, tt.randReadErr
+				}
+				defer func() { randRead = oldRandRead }()
+			}
 
 			resp, err := handler.PostApiTokens(context.Background(), tt.request)
 
