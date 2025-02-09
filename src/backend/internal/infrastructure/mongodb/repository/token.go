@@ -17,8 +17,15 @@ type TokenRepository struct {
 }
 
 func NewTokenRepository(db *mongo.Database) *TokenRepository {
+	if db == nil {
+		panic("database connection is required")
+	}
+	collection := db.Collection("tokens")
+	if collection == nil {
+		panic("failed to get tokens collection")
+	}
 	return &TokenRepository{
-		collection: NewMongoCollectionWrapper(db.Collection("tokens")),
+		collection: NewMongoCollectionWrapper(collection),
 	}
 }
 

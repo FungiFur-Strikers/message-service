@@ -13,6 +13,9 @@ type TokenHandler struct {
 	repo token.Repository
 }
 
+// テスト用にrand.Readをモック可能にする
+var randRead = rand.Read
+
 func NewTokenHandler(repo token.Repository) *TokenHandler {
 	return &TokenHandler{repo: repo}
 }
@@ -20,7 +23,7 @@ func NewTokenHandler(repo token.Repository) *TokenHandler {
 func (h *TokenHandler) PostApiTokens(ctx context.Context, req api.PostApiTokensRequestObject) (api.PostApiTokensResponseObject, error) {
 	// トークンの生成
 	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
+	if _, err := randRead(tokenBytes); err != nil {
 		return api.PostApiTokens400Response{}, err
 	}
 	tokenString := base64.URLEncoding.EncodeToString(tokenBytes)
