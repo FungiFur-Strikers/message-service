@@ -1,4 +1,3 @@
-// src\backend\internal\infrastructure\mongodb\repository\token_test.go
 package repository
 
 import (
@@ -14,6 +13,22 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+func TestNewTokenRepository(t *testing.T) {
+	// リポジトリとモックコレクションの作成
+	repo, mockCollection := NewTestTokenRepository()
+
+	// 検証
+	assert.NotNil(t, repo)
+	assert.NotNil(t, repo.collection)
+
+	// モックコレクションが正しく設定されていることを確認
+	assert.Equal(t, mockCollection, repo.collection)
+
+	// TestCollection型であることを確認
+	_, ok := repo.collection.(*TestCollection)
+	assert.True(t, ok, "collection should be of type *TestCollection")
+}
 
 func TestTokenRepository_Create(t *testing.T) {
 	tests := []struct {
@@ -94,7 +109,7 @@ func TestTokenRepository_List(t *testing.T) {
 			mockFn: func(m *TestCollection) {
 				m.On("Find", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
 					return filter["deleted_at"] == nil
-				})).Return(cursor, nil)
+				}), mock.Anything).Return(cursor, nil)
 			},
 			want:    mockTokens,
 			wantErr: false,
@@ -104,7 +119,7 @@ func TestTokenRepository_List(t *testing.T) {
 			mockFn: func(m *TestCollection) {
 				m.On("Find", mock.Anything, mock.MatchedBy(func(filter bson.M) bool {
 					return filter["deleted_at"] == nil
-				})).Return(nil, errors.New("database error"))
+				}), mock.Anything).Return(nil, errors.New("database error"))
 			},
 			want:    nil,
 			wantErr: true,

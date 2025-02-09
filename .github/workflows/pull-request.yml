@@ -2,7 +2,7 @@ name: Pull Request Checks
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main, develop]
     paths:
       - "src/backend/**"
       - ".github/workflows/**"
@@ -57,9 +57,19 @@ jobs:
         run: |
           # main.goとapi.gen.goを除外してカバレッジを取得
           go test -v -race $(go list ./... | grep -v /cmd/ | grep -v /pkg/api) -coverprofile=coverage.txt -covermode=atomic
-          # または
-          # go test -v -race ./internal/... -coverprofile=coverage.txt -covermode=atomic
-          go tool cover -func=coverage.txt
+          # カバレッジの詳細を保存
+          go tool cover -func=coverage.txt > coverage_summary.txt
+          # 全体のカバレッジ率を抽出
+          TOTAL_COVERAGE=$(tail -n 1 coverage_summary.txt | awk '{print $3}' | sed 's/%//')
+          echo "TOTAL_COVERAGE=$TOTAL_COVERAGE" >> $GITHUB_ENV
+          # カバレッジが基準値を下回る場合はエラー
+          if (( $(echo "$TOTAL_COVERAGE < 80" | bc -l) )); then
+            echo "COVERAGE_STATUS=fail" >> $GITHUB_ENV
+            echo "::error::Coverage ${TOTAL_COVERAGE}% is below the required 80%"
+            exit 1
+          else
+            echo "COVERAGE_STATUS=pass" >> $GITHUB_ENV
+          fi
 
       - name: Build
         working-directory: ./src/backend
@@ -69,7 +79,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: ./src/backend/coverage.txt
+          path: |
+            ./src/backend/coverage.txt
+            ./src/backend/coverage_summary.txt
 
       - name: Comment PR
         uses: actions/github-script@v6
@@ -77,19 +89,35 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const { status } = require('process');
+            const coverageStatus = process.env.COVERAGE_STATUS;
 
             let summary = `### CI Results\n\n`;
 
-            if (status === 0) {
-              summary += `✅ All checks passed successfully!\n\n`;
-            } else {
+            if (coverageStatus === 'fail') {
               summary += `❌ Some checks failed. Please review the details below.\n\n`;
+            } else {
+              summary += `✅ All checks passed successfully!\n\n`;
             }
 
-            if (fs.existsSync('./src/backend/coverage.txt')) {
-              const coverage = fs.readFileSync('./src/backend/coverage.txt', 'utf8');
-              summary += `#### Test Coverage\n\`\`\`\n${coverage}\n\`\`\`\n\n`;
+            if (fs.existsSync('./src/backend/coverage_summary.txt')) {
+              const coverageSummary = fs.readFileSync('./src/backend/coverage_summary.txt', 'utf8');
+              const totalCoverage = process.env.TOTAL_COVERAGE;
+              
+              let coverageStatus = '🟢';
+              if (totalCoverage < 80) {
+                coverageStatus = '🔴';
+              } else if (totalCoverage < 90) {
+                coverageStatus = '🟡';
+              }
+              
+              summary += `#### Test Coverage ${coverageStatus}\n\n`;
+              summary += `全体のカバレッジ: **${totalCoverage}%**\n\n`;
+              summary += `<details><summary>詳細なカバレッジレポート</summary>\n\n`;
+              summary += `\`\`\`\n${coverageSummary}\n\`\`\`\n</details>\n\n`;
+              
+              if (totalCoverage < 80) {
+                summary += `> ⚠️ カバレッジが要求される最小値（80%）を下回っています。\n`;
+              }
             }
 
             github.rest.issues.createComment({

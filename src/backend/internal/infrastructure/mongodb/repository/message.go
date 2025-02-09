@@ -15,8 +15,15 @@ type MessageRepository struct {
 }
 
 func NewMessageRepository(db *mongo.Database) message.Repository {
+	if db == nil {
+		panic("database connection is required")
+	}
+	collection := db.Collection("messages")
+	if collection == nil {
+		panic("failed to get messages collection")
+	}
 	return &MessageRepository{
-		collection: NewMongoCollectionWrapper(db.Collection("messages")),
+		collection: NewMongoCollectionWrapper(collection),
 	}
 }
 

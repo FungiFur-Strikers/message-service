@@ -1,4 +1,3 @@
-// src\backend\internal\infrastructure\mongodb\index_test.go
 package mongodb
 
 import (
@@ -40,6 +39,64 @@ type mockDatabase struct {
 func (m *mockDatabase) Collection(name string) Collection {
 	args := m.Called(name)
 	return args.Get(0).(Collection)
+}
+
+// カスタムデータベース実装（NewDatabaseのデフォルトケースのテスト用）
+type customDatabase struct {
+	mock.Mock
+}
+
+func (c *customDatabase) Collection(name string) Collection {
+	args := c.Called(name)
+	return args.Get(0).(Collection)
+}
+
+func TestNewIndexClient(t *testing.T) {
+	t.Run("正常系：新しいIndexClientが作成される", func(t *testing.T) {
+		// テスト用のデータベースを作成
+		db := &mongo.Database{}
+
+		// NewIndexClientを呼び出し
+		client := NewIndexClient(db)
+
+		// 戻り値の型を確認
+		assert.NotNil(t, client)
+		assert.IsType(t, &IndexClient{}, client)
+
+		// インスタンスが正しく作成されていることを確認
+		assert.NotNil(t, client)
+		assert.IsType(t, &IndexClient{}, client)
+	})
+}
+
+func TestNewDatabase(t *testing.T) {
+	t.Run("*mongo.Databaseケース", func(t *testing.T) {
+		// *mongo.Databaseを渡した場合
+		mongoDb := &mongo.Database{}
+		db := NewDatabase(mongoDb)
+
+		// MongoDatabaseのインスタンスが返されることを確認
+		_, ok := db.(*MongoDatabase)
+		assert.True(t, ok, "should return *MongoDatabase")
+	})
+
+	t.Run("カスタムDatabaseケース", func(t *testing.T) {
+		// カスタムDatabase実装を渡した場合
+		customDb := &customDatabase{}
+		mockCol := &mockCollection{}
+		customDb.On("Collection", "test").Return(mockCol)
+
+		db := NewDatabase(customDb)
+
+		// 同じインスタンスが返されることを確認
+		assert.Same(t, customDb, db)
+
+		// 機能が正しく動作することを確認
+		col := db.Collection("test")
+		assert.Same(t, mockCol, col)
+
+		customDb.AssertExpectations(t)
+	})
 }
 
 func TestCreateIndexes(t *testing.T) {
@@ -169,6 +226,7 @@ func TestMongoDatabase_Collection(t *testing.T) {
 	// モックの期待通りの呼び出しを検証
 	mockDB.AssertExpectations(t)
 }
+
 func TestMongoCollection_Indexes(t *testing.T) {
 	coll := &mongo.Collection{}
 	wrapper := &MongoCollection{coll: coll}
