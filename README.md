@@ -37,7 +37,8 @@
 message-service/
 ├── .air.toml          # Live reload configuration
 ├── .docker/           # Docker related files
-├── compose.yml        # Docker compose configuration
+├── compose.yml        # Docker compose configuration (開発環境用)
+├── compose.prod.yml   # Docker compose configuration (本番環境用)
 ├── src/
 │   ├── backend/       # Go backend application
 │   │   ├── cmd/      # Application entrypoints
@@ -89,6 +90,31 @@ cp .env.example .env
 ```bash
 docker compose up -d
 ```
+
+## 本番環境へのデプロイ
+
+本番環境では、開発用の機能を除外した `compose.prod.yml` を使用します：
+
+```bash
+docker compose -f compose.prod.yml up -d
+```
+
+### 本番環境の特徴
+
+- 開発ツール（Mongo Express、Redoc）が除外されています
+- コンテナの自動再起動が有効化されています
+- リソース制限が設定されています（CPU、メモリ）
+- ログローテーションが設定されています
+- ホットリロードが無効化され、最適化されたバイナリを直接実行します
+
+### 本番環境用の環境変数
+
+本番環境では以下の環境変数のみが必要です：
+
+- `BACKEND_PORT`: バックエンドサービスのポート
+- `MONGO_INITDB_ROOT_USERNAME`: MongoDB の root 用ユーザー名
+- `MONGO_INITDB_ROOT_PASSWORD`: MongoDB の root 用パスワード
+- `MONGODB_NAME`: データベース名
 
 ## 提供サービス
 
