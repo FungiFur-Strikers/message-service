@@ -93,14 +93,30 @@ docker compose up -d
 
 ## 本番環境へのデプロイ
 
-本番環境では、開発用の機能を除外した `compose.prod.yml` を使用します：
+[![Publish Docker Image](https://github.com/FungiFur-Strikers/message-service/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/FungiFur-Strikers/message-service/actions/workflows/docker-publish.yml)
+
+本番環境では、開発用の機能を除外した `compose.prod.yml` を使用します。このプロジェクトは Docker Hub に公開されたイメージを使用してデプロイできます：
+
+1. 環境変数の設定
 
 ```bash
-docker compose -f compose.prod.yml up -d
+cp .env.example .env
+# .envファイルを編集して必要な環境変数を設定
+```
+
+2. デプロイの実行
+
+```bash
+# Docker Hubからイメージをプル
+DOCKERHUB_USERNAME=your-dockerhub-username docker compose -f compose.prod.yml pull
+
+# サービスの起動
+DOCKERHUB_USERNAME=your-dockerhub-username docker compose -f compose.prod.yml up -d
 ```
 
 ### 本番環境の特徴
 
+- Docker Hub に公開された最適化されたイメージを使用
 - 開発ツール（Mongo Express、Redoc）が除外されています
 - コンテナの自動再起動が有効化されています
 - リソース制限が設定されています（CPU、メモリ）
@@ -109,8 +125,9 @@ docker compose -f compose.prod.yml up -d
 
 ### 本番環境用の環境変数
 
-本番環境では以下の環境変数のみが必要です：
+本番環境では以下の環境変数が必要です：
 
+- `DOCKERHUB_USERNAME`: Docker Hub のユーザー名
 - `BACKEND_PORT`: バックエンドサービスのポート
 - `MONGO_INITDB_ROOT_USERNAME`: MongoDB の root 用ユーザー名
 - `MONGO_INITDB_ROOT_PASSWORD`: MongoDB の root 用パスワード

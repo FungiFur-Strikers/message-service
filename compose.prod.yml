@@ -1,8 +1,6 @@
 services:
   backend:
-    build:
-      context: ./src/backend
-      dockerfile: ../../.docker/backend/Dockerfile
+    image: ${DOCKERHUB_USERNAME}/message-service:latest
     ports:
       - ${BACKEND_PORT}:8080
     command: /app/main
