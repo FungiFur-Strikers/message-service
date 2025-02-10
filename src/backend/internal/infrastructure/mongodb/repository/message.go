@@ -75,7 +75,7 @@ func (r *MessageRepository) Search(ctx context.Context, criteria message.SearchC
 		filter["sent_at"] = dateFilter
 	}
 
-	opts := options.Find().SetSort(bson.D{{Key: "sent_at", Value: -1}})
+	opts := options.Find().SetSort(bson.D{{Key: "sent_at", Value: 1}})
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, err
